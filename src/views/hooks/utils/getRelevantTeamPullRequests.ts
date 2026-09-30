@@ -3,11 +3,13 @@ import type {
   PullListReview,
   PullRequestList,
 } from "src/mainProcess/api/PullRequests/utils/getDefaultData";
+import { mentionKeyForPullRequest, type LatestMention } from "./getLatestMentions";
 
 interface GetRelevantTeamPullRequestsParams {
   comments: Record<string, Record<string, ListCommentsData>>;
   pullRequests: PullRequestList;
   reviews: Record<string, Record<string, PullListReview>>;
+  mentionedPullRequests?: ReadonlyMap<string, LatestMention>;
   user: {
     id: number;
     login: string;
@@ -32,6 +34,7 @@ export const getRelevantTeamPullRequests = ({
   comments,
   pullRequests,
   reviews,
+  mentionedPullRequests,
   user,
 }: GetRelevantTeamPullRequestsParams) => {
   return pullRequests.filter((pullRequest) => {
@@ -40,6 +43,10 @@ export const getRelevantTeamPullRequests = ({
     }
 
     if (pullRequest.requested_reviewers?.some(({ id }) => id === user.id)) {
+      return true;
+    }
+
+    if (mentionedPullRequests?.has(mentionKeyForPullRequest(pullRequest))) {
       return true;
     }
 

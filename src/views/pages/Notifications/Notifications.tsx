@@ -5,6 +5,7 @@ import {
   GitPullRequestIcon,
   CodeReviewIcon,
   WorkflowIcon,
+  LinkExternalIcon,
 } from "@primer/octicons-react";
 import { Badge, Button, Card, Flex, Select, Text } from "@radix-ui/themes";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,6 +18,7 @@ import {
   notificationQueryKey,
   useNotifications,
 } from "../../hooks/useNotifications";
+import { GitHubLink } from "../../components/ActivityContent/GitHubLink";
 
 const queryKey = notificationQueryKey;
 const typeLabels: Record<NotificationType, string> = {
@@ -35,6 +37,25 @@ const iconForType = (type: NotificationType) => {
   return <AlertIcon size={16} />;
 };
 
+const iconColor = (item: NotificationRecord) => {
+  let tone = item.tone;
+
+  // Records saved before outcome metadata was added still have readable result text.
+  if (!tone && (item.type === "review" || /review/i.test(item.title))) {
+    if (/approved it|is now approved/i.test(item.body)) tone = "success";
+    if (/requested some changes/i.test(item.body)) tone = "danger";
+  }
+  if (!tone && item.type === "ci") {
+    if (/successfully passed|\bto success\b/i.test(item.body)) tone = "success";
+    if (/\bto (failure|timed_out|startup_failure|action_required)\b/i.test(item.body)) tone = "danger";
+  }
+
+  if (tone === "success") return "var(--green-11)";
+  if (tone === "danger") return "var(--red-11)";
+  if (tone === "neutral") return "var(--gray-11)";
+  return "var(--accent-11)";
+};
+
 const relativeTime = (date: string) => {
   const seconds = Math.max(
     0,
@@ -44,6 +65,47 @@ const relativeTime = (date: string) => {
   if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;
   return `${Math.round(seconds / 86400)}d ago`;
+};
+
+const getNotificationSource = (item: NotificationRecord) => {
+  if (item.type === "system") {
+    return { label: "", pullRequestUrl: "", workflowUrl: "" };
+  }
+
+  let repository = item.source?.repository;
+  let pullNumber = item.source?.pullNumber;
+  let workflowUrl = "";
+  if ((!repository || !pullNumber) && item.url) {
+    try {
+      const url = new URL(item.url);
+      if (url.hostname === "github.com") {
+        const parts = url.pathname.split("/").filter(Boolean);
+        repository ||= parts.slice(0, 2).join("/");
+        if (["pull", "issues"].includes(parts[2])) {
+          pullNumber ||= Number(parts[3]);
+        } else if (item.type === "ci" && parts[2] === "actions") {
+          workflowUrl = url.toString();
+        }
+      }
+    } catch {
+      // Older notifications may have no usable URL.
+    }
+  }
+
+  const label = [
+    repository,
+    pullNumber ? `#${pullNumber}` : undefined,
+    item.source?.branch,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const segments = repository?.split("/");
+  const pullRequestUrl =
+    segments?.length === 2 && segments.every(Boolean) && pullNumber
+      ? `https://github.com/${segments.map(encodeURIComponent).join("/")}/pull/${pullNumber}`
+      : "";
+
+  return { label, pullRequestUrl, workflowUrl };
 };
 
 interface NotificationListProps {
@@ -75,37 +137,52 @@ const NotificationList = ({
 
   return (
     <Flex direction="column" gap="2">
-      {notifications.map((item) => (
-        <Card
-          key={item.id}
-          variant="ghost"
-          style={{ opacity: item.read ? 0.78 : 1 }}
-        >
-          <Flex gap="3" align="start">
-            <Flex pt="1" style={{ color: "var(--accent-11)" }}>
-              {iconForType(item.type)}
-            </Flex>
-            <Flex direction="column" gap="1" flexGrow="1">
-              <Flex justify="between" gap="2">
-                <Text weight={item.read ? "regular" : "bold"}>
-                  {item.title}
-                </Text>
-                <Text size="1" color="gray">
-                  {relativeTime(item.createdAt)}
-                </Text>
+      {notifications.map((item) => {
+        const source = getNotificationSource(item);
+        return (
+          <Card
+            key={item.id}
+            variant="ghost"
+            style={{ opacity: item.read ? 0.78 : 1 }}
+          >
+            <Flex gap="3" align="start">
+              <Flex pt="1" style={{ color: iconColor(item) }}>
+                {iconForType(item.type)}
               </Flex>
-              <Text size="2" color="gray">
-                {item.body}
-              </Text>
-              {!item.read && (
-                <Text size="1" style={{ color: "var(--accent-11)" }}>
-                  Unread
+              <Flex direction="column" gap="1" flexGrow="1">
+                <Flex justify="between" gap="2">
+                  <Text weight={item.read ? "regular" : "bold"}>
+                    {item.title}
+                  </Text>
+                  <Text size="1" color="gray">
+                    {relativeTime(item.createdAt)}
+                  </Text>
+                </Flex>
+                <Text size="2" color="gray">
+                  {item.body}
                 </Text>
-              )}
+                {source.label && (
+                  <Text size="1" color="gray" style={{ overflowWrap: "anywhere" }}>
+                    {source.pullRequestUrl || source.workflowUrl ? (
+                      <GitHubLink href={source.pullRequestUrl || source.workflowUrl}>
+                        <Flex as="span" align="center" gap="1">
+                          {source.pullRequestUrl ? source.label : "View workflow run"}
+                          <LinkExternalIcon size={14} aria-hidden="true" />
+                        </Flex>
+                      </GitHubLink>
+                    ) : source.label}
+                  </Text>
+                )}
+                {!item.read && (
+                  <Text size="1" style={{ color: "var(--accent-11)" }}>
+                    Unread
+                  </Text>
+                )}
+              </Flex>
             </Flex>
-          </Flex>
-        </Card>
-      ))}
+          </Card>
+        );
+      })}
     </Flex>
   );
 };

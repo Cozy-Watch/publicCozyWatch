@@ -48,13 +48,21 @@ export type NotificationType =
   | "mention"
   | "system";
 
+export type NotificationTone = "success" | "danger" | "neutral";
+
 export interface NotificationRecord {
   id: string;
   type: NotificationType;
+  tone?: NotificationTone;
   title: string;
   body: string;
   createdAt: string;
   url?: string;
+  source?: {
+    repository?: string;
+    pullNumber?: number;
+    branch?: string;
+  };
   read: boolean;
 }
 

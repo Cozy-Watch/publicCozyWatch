@@ -9,6 +9,7 @@ import { ReviewAvatar } from "../ReviewAvatar/ReviewAvatar";
 import { LastUpdate } from "../../../PullRequestsCard/components/LastUpdate/LastUpdate";
 
 interface Props {
+  inline?: boolean;
   pullRequestUrl: string;
   reviewsGroupedbyUser?: Record<
     string,
@@ -26,6 +27,7 @@ interface Props {
 export const LastActivity = ({
   reviewsGroupedbyUser,
   pullRequestUrl,
+  inline = false,
 }: Props) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const contentId = useId();
@@ -40,25 +42,29 @@ export const LastActivity = ({
 
   return (
     <Flex className="activity-panel" direction="column" p="3" gap="2">
-      <button
-        type="button"
-        className="activity-toggle"
-        aria-expanded={isExpanded}
-        aria-controls={contentId}
-        onClick={() => setIsExpanded((state) => !state)}
-      >
-        Latest Activity
-        <span
-          style={{
-            display: "inline-flex",
-            transform: isExpanded ? "rotate(180deg)" : undefined,
-          }}
+      {inline ? (
+        <Text size="1" weight="medium" color="gray">Latest activity</Text>
+      ) : (
+        <button
+          type="button"
+          className="activity-toggle"
+          aria-expanded={isExpanded}
+          aria-controls={contentId}
+          onClick={() => setIsExpanded((state) => !state)}
         >
-          <ChevronDownIcon size={16} />
-        </span>
-      </button>
-      <div id={contentId} hidden={!isExpanded}>
-        {isExpanded && (
+          Latest Activity
+          <span
+            style={{
+              display: "inline-flex",
+              transform: isExpanded ? "rotate(180deg)" : undefined,
+            }}
+          >
+            <ChevronDownIcon size={16} />
+          </span>
+        </button>
+      )}
+      <div id={contentId} hidden={!inline && !isExpanded}>
+        {(inline || isExpanded) && (
           <Flex py="2" gap="4" direction="column">
             {feedback.map((review) => (
               <Flex

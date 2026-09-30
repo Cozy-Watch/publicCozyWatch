@@ -36,9 +36,7 @@ beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   Object.assign(window, {
     electronAPI: {
-      application: {
-        getVersion: jest.fn<() => Promise<string>>().mockResolvedValue("0.9.6"),
-      },
+      application: {},
     },
   });
   container = document.createElement("div");
@@ -105,14 +103,15 @@ const focus = async (element: HTMLElement) => {
 };
 
 describe("Menubar tabs", () => {
-  it("shows the version before sign-in", async () => {
+  it("shows sign-in without a version footer", async () => {
     mockUseIsAuthenticatedQuery.mockReturnValue({
       data: false,
     } as ReturnType<typeof useIsAuthenticatedQuery>);
 
     await renderMenubar();
 
-    expect(container.textContent).toContain("v0.9.6");
+    expect(container.textContent).toContain("Sign In to Github");
+    expect(container.textContent).not.toContain("v0.9.6");
   });
 
   it("shows capped counts and selects the relevant panel by mouse or keyboard", async () => {
@@ -130,7 +129,7 @@ describe("Menubar tabs", () => {
     expect(teamTab.classList.contains("menubar-classic-tab")).toBe(true);
     expect(container.querySelector(".menubar-classic-tabs")).not.toBeNull();
     expect(container.querySelector(".menubar-classic-panel")).not.toBeNull();
-    expect(container.textContent).toContain("v0.9.6");
+    expect(container.textContent).not.toContain("v0.9.6");
     expect(mineTab.getAttribute("aria-selected")).toBe("true");
     expect(
       container.querySelector('[role="tabpanel"][data-state="active"]')
@@ -162,6 +161,6 @@ describe("Menubar tabs", () => {
 
     expect(container.querySelectorAll(".menubar-classic-tab")).toHaveLength(2);
     expect(container.querySelector(".menubar-classic-panel")).not.toBeNull();
-    expect(container.textContent).toContain("v0.9.6");
+    expect(container.textContent).not.toContain("v0.9.6");
   });
 });

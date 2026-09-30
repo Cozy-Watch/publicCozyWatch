@@ -31,6 +31,7 @@ import { pullsListQuery } from "./pullListQuery";
 import { pullsListReviewsQuery, retainOpenReviewPages } from "./pullListReviewQuery";
 import { settleRefreshWork } from "../../../polling/refreshCoordinator";
 import { getReviewNotifications } from "../utils/getReviewNotifications";
+import { fetchRecentReviewComments } from "./recentReviewCommentsQuery";
 
 const pullListOperationName = "pull-list-requests";
 const pullListReviewOperationName = "pull-listReview-requests";
@@ -75,7 +76,7 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
     );
 
     // Rough estimate: 1 repo = ~4 requests (list, actions, reviews per PR, comments per PR)
-    const estimatedRequests = repositories.length * 4;
+    const estimatedRequests = repositories.length * 5;
 
     if (rateLimit.rate.remaining < Math.max(estimatedRequests + 50, 100)) {
       const resetTime = new Date(rateLimit.rate.reset * 1000);
@@ -319,7 +320,12 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
     }
   };
 
-  await settleRefreshWork([commentsTask(), reviewsTask(), actionsTask()]);
+  await settleRefreshWork([
+    commentsTask(),
+    reviewsTask(),
+    actionsTask(),
+    fetchRecentReviewComments(octokit, repositories, cache),
+  ]);
   assertCurrent();
 
   // -----------------------------------------------
@@ -502,6 +508,7 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
 
   const pullRequestsAddedNotification = pullRequestAddedOrRemoved.added.map(
     (pr) => {
+      const source = { repository: pr.base.repo.full_name, pullNumber: pr.number, branch: pr.head.ref };
       const owner = pr?.user?.id === user.id;
 
       const isReviewer = pr?.requested_reviewers?.some(
@@ -514,6 +521,7 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
           body: `You have opened "${pr?.title}".`,
           type: "pullRequest",
           url: pr.html_url,
+          source,
         };
       }
 
@@ -523,6 +531,7 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
           body: `You have been requested to review "${pr?.title}".`,
           type: "pullRequest",
           url: pr.html_url,
+          source,
         };
       }
 
@@ -531,12 +540,14 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
         body: `"${pr?.title}" has been assigned to you.`,
         type: "pullRequest",
         url: pr.html_url,
+        source,
       };
     },
   );
 
   const pullRequestsRemovedNotification = pullRequestAddedOrRemoved.removed.map(
     (pr) => {
+      const source = { repository: pr.base.repo.full_name, pullNumber: pr.number, branch: pr.head.ref };
       const isReviewer = pr?.requested_reviewers?.some(
         (reviewer) => reviewer.id === user.id,
       );
@@ -547,6 +558,7 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
           body: `You are no longer a reviewer of "${pr?.title}".`,
           type: "pullRequest",
           url: pr.html_url,
+          source,
         };
       }
 
@@ -555,6 +567,7 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
         body: `Pull Request "${pr?.title}" has been closed.`,
         type: "pullRequest",
         url: pr.html_url,
+        source,
       };
     },
   );
@@ -580,25 +593,51 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
           cache.pullRequestsPerRepo[repositoryName] || {},
         ).flat();
 
-        const pullRequestData = pullRequestList.find(({ number }) => {
-          return finalRun.pull_requests?.find((pr) => pr.number === number);
-        });
+        const linkedPullRequests = finalRun.pull_requests ?? [];
+        const pullRequestData =
+          pullRequestList.find((pr) =>
+            linkedPullRequests.some(
+              (linkedPr) => linkedPr.number === pr.number || linkedPr.id === pr.id,
+            ),
+          ) ??
+          (finalRun.head_sha
+            ? pullRequestList.find((pr) => pr.head.sha === finalRun.head_sha)
+            : undefined) ??
+          (finalRun.head_branch
+            ? pullRequestList.find((pr) => pr.head.ref === finalRun.head_branch)
+            : undefined);
 
-        const { title } = pullRequestData || {};
+        const title = pullRequestData?.title;
+        const pullNumber = pullRequestData?.number ?? finalRun.pull_requests?.[0]?.number;
+        const source = {
+          repository: `${repo.owner}/${repo.name}`,
+          pullNumber,
+          branch: pullRequestData?.head.ref ?? finalRun.head_branch,
+        };
+        const pullRequestUrl = pullRequestData?.html_url ?? (pullNumber
+          ? `https://github.com/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/pull/${pullNumber}`
+          : finalRun.html_url);
+        const subject = title ? `Pull Request "${title}"` : pullNumber ? `Pull Request #${pullNumber}` : "This branch";
 
-        if (finalRun.status === "success") {
+        if (finalRun.conclusion === "success") {
           return {
             title: `CI "${runName}" Status Update`,
-            body: `Pull Request "${title}" successfully passed the checks.`,
+            body: `${subject} successfully passed the checks.`,
             type: "ci",
-            url: repo.htmlUrl,
+            tone: "success",
+            url: pullRequestUrl,
+            source,
           };
         }
         return {
           title: `CI "${runName}" Status Update`,
-          body: `Pull Request "${title}" status changed from ${initialRun.conclusion} to ${finalRun.conclusion}.`,
+          body: `${subject} status changed from ${initialRun.conclusion} to ${finalRun.conclusion}.`,
           type: "ci",
-          url: repo.htmlUrl,
+          tone: ["failure", "timed_out", "startup_failure", "action_required"].includes(finalRun.conclusion ?? "")
+            ? "danger"
+            : "neutral",
+          url: pullRequestUrl,
+          source,
         };
       });
 
@@ -615,8 +654,9 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
 
     const userLogin = user?.login || user?.name || "Someone";
 
+    const repository = new URL(html_url).pathname.split("/").slice(1, 3).join("/");
     const pullRequest = allPullRequests.find(
-      (pr) => pr.number === Number(pullNumber),
+      (pr) => pr.number === Number(pullNumber) && pr.base.repo.full_name === repository,
     );
 
     const pullRequestTitle = pullRequest?.title || "a pull request";
@@ -625,7 +665,8 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
       title: "You have been mentioned",
       body: `${userLogin} mentioned you in "${pullRequestTitle}".`,
       type: "mention",
-      url: html_url,
+      url: pullRequest?.html_url ?? `https://github.com/${repository}/pull/${pullNumber}`,
+      source: { repository, pullNumber: Number(pullNumber), branch: pullRequest?.head.ref },
     };
   });
 

@@ -8,7 +8,9 @@ import { usePullRequestQuery } from "../../api/usePullRequestQuery";
 import { useRepositoriesQuery } from "../../api/useRepositoriesQuery";
 import { useUserQuery } from "../../api/useUserQuery";
 import { getReviewsGroupedByUser } from "../../hooks/utils/getReviewsGroupedByUser";
+import { orderPullRequestsByLatestFeedback } from "../../hooks/utils/sortPullRequestsByLatestFeedback";
 import { getFullyApproved } from "../../hooks/utils/getFullyApproved";
+import { getLatestMentions, mentionKeyForPullRequest, type LatestMention } from "../../hooks/utils/getLatestMentions";
 import {
   getRelevantTeamPullRequests,
   isMyPullRequest,
@@ -21,28 +23,16 @@ export type PullRequestFilter =
   | "pendingReviews"
   | "reviewed";
 
-const mentionsPullRequest = (
-  pullRequest: PullRequestList[0],
-  mentions: CacheData["mentions"],
-  login: string,
-) => {
-  const repositoryMentions = Object.values(
-    mentions[pullRequest.base.repo.name] ?? {},
-  ).flat();
-
-  return repositoryMentions.some(
-    (mention) =>
-      Number(mention.pullNumber) === pullRequest.number &&
-      new RegExp(`@${login}(?![a-zA-Z0-9_-])`, "i").test(mention.body ?? ""),
-  );
-};
-
 const mapPullRequests = (
   pullRequests: PullRequestList,
   cache: CacheData,
   includeMentionActivity: boolean,
-) =>
-  pullRequests.flatMap((pullRequest) => {
+  latestMentions: ReadonlyMap<string, LatestMention>,
+ ) => {
+  const { pullRequests: sortedPullRequests, latestFeedbackAtByPullRequest } =
+    orderPullRequestsByLatestFeedback(pullRequests, cache);
+
+  return sortedPullRequests.flatMap((pullRequest) => {
     if (!pullRequest.head.repo) {
       return [];
     }
@@ -110,6 +100,9 @@ const mapPullRequests = (
         waitingReviews: pendingReviews.length,
         pullRequestUrl: pullRequest.html_url,
         labels: pullRequest.labels,
+        latestFeedbackAt:
+          latestFeedbackAtByPullRequest.get(pullRequest) || undefined,
+        latestMention: latestMentions.get(mentionKeyForPullRequest(pullRequest)),
         assignees: (pullRequest.assignees ?? []).map((assignee) => ({
           login: assignee.login,
           name: assignee.name,
@@ -118,6 +111,7 @@ const mapPullRequests = (
       },
     ];
   });
+};
 
 export const usePullRequestScope = (
   scope: PullRequestScope,
@@ -142,11 +136,13 @@ export const usePullRequestScope = (
     const myPullRequests = activePullRequests.filter((pullRequest) =>
       isMyPullRequest(pullRequest, user.id),
     );
+    const latestMentions = getLatestMentions(cache, user);
     const relevantPullRequests = getRelevantTeamPullRequests({
       comments: cache.mentions,
       pullRequests: activePullRequests,
       reviews: cache.reviewPerRepoPerPullNumber,
       user,
+      mentionedPullRequests: latestMentions,
     });
     const scopePullRequests =
       scope === "my" ? myPullRequests : relevantPullRequests;
@@ -183,7 +179,7 @@ export const usePullRequestScope = (
             : scopePullRequests;
 
     return {
-      cards: mapPullRequests(filteredPullRequests, cache, false),
+      cards: mapPullRequests(filteredPullRequests, cache, false, latestMentions),
       counts: {
         all: scopePullRequests.length,
         fullyApproved: fullyApproved.length,
@@ -224,24 +220,26 @@ export const useMentionedPullRequests = () => {
     const myPullRequests = activePullRequests.filter((pullRequest) =>
       isMyPullRequest(pullRequest, user.id),
     );
+    const latestMentions = getLatestMentions(cache, user);
     const relevantPullRequests = getRelevantTeamPullRequests({
       comments: cache.mentions,
       pullRequests: activePullRequests,
       reviews: cache.reviewPerRepoPerPullNumber,
       user,
+      mentionedPullRequests: latestMentions,
     });
     const uniqueMentionedPullRequests = Array.from(
       new Map(
         [...myPullRequests, ...relevantPullRequests]
           .filter((pullRequest) =>
-            mentionsPullRequest(pullRequest, cache.mentions, user.login),
+            latestMentions.has(mentionKeyForPullRequest(pullRequest)),
           )
           .map((pullRequest) => [pullRequest.id, pullRequest]),
       ).values(),
     );
 
     return {
-      cards: mapPullRequests(uniqueMentionedPullRequests, cache, true),
+      cards: mapPullRequests(uniqueMentionedPullRequests, cache, true, latestMentions),
       count: uniqueMentionedPullRequests.length,
     };
   }, [pullRequestsQuery.data, repositoriesQuery.data, userQuery.data]);

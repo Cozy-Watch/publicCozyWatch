@@ -129,7 +129,7 @@ export class MockGithub {
     if (!match || !repo) throw new Error(`Unmodelled endpoint: ${url.pathname}`);
     const route = match[3];
     const allowedParameters = new Set(["page", "per_page",
-      ...(route === "pulls" ? ["state"] : route === "actions/runs" ? ["event"] : [])]);
+      ...(route === "pulls" ? ["state"] : route === "actions/runs" ? ["event"] : route === "pulls/comments" ? ["since", "sort", "direction"] : [])]);
     for (const key of url.searchParams.keys()) {
       if (!allowedParameters.has(key)) throw new Error(`Unmodelled query parameter: ${key}`);
     }
@@ -151,6 +151,9 @@ export class MockGithub {
         if (reviewers) pr.requested_reviewers = reviewers.map((id) => userFixture(id));
         return pr;
       };
+    } else if (route === "pulls/comments") {
+      count = 0;
+      makeItem = () => null;
     } else if (route === "actions/runs") {
       if (url.searchParams.get("event") !== "pull_request") throw new Error("Unexpected workflow event");
       // GitHub caps filtered workflow-run searches at 1,000 results.

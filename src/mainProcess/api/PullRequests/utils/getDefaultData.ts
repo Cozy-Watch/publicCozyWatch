@@ -14,6 +14,10 @@ export type ListComments =
 
 export type ExtendedComment = ListComments["data"][0] & { pullNumber: string };
 export type ListCommentsData = ExtendedComment[];
+export type ReviewComment = Pick<
+  Endpoints["GET /repos/{owner}/{repo}/pulls/comments"]["response"]["data"][number],
+  "body" | "updated_at" | "created_at" | "html_url" | "pull_request_url" | "user"
+>;
 
 export interface ReviewData {
   reviewId: number;
@@ -66,6 +70,7 @@ export interface CacheData {
   CIStatusUpdatePerRepo: Record<RepositoryName, Record<RunName, CIStatus>>;
 
   mentions: Record<RepositoryName, Record<Page, ListCommentsData>>;
+  reviewCommentsPerRepo: Record<RepositoryName, ReviewComment[]>;
 
   flatPullRequests: PullRequestList;
 }
@@ -89,6 +94,7 @@ const defaultData = {
   CIStatusUpdatePerRepo: {},
 
   mentions: {},
+  reviewCommentsPerRepo: {},
 
   flatPullRequests: [],
 };

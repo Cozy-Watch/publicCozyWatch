@@ -5,10 +5,12 @@ export function GitHubLink({
   href,
   children,
   className = "activity-link",
+  ariaLabel,
 }: {
   href: string;
   children: ReactNode;
   className?: string;
+  ariaLabel?: string;
 }) {
   const [failed, setFailed] = useState(false);
   return (
@@ -16,6 +18,7 @@ export function GitHubLink({
       <a
         href={href}
         className={className}
+        aria-label={ariaLabel}
         onClick={async (event) => {
           event.preventDefault();
           setFailed(false);

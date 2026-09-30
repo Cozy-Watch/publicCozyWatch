@@ -3,6 +3,7 @@ import Logger from "electron-log";
 import { getData, storeData } from "../safeStorage/safeStorage";
 import type {
   NotificationRecord,
+  NotificationTone,
   NotificationType,
 } from "../safeStorage/safeStorage.types";
 
@@ -10,8 +11,15 @@ export interface ManagedNotification {
   title: string;
   body: string;
   type?: NotificationType;
+  tone?: NotificationTone;
   url?: string;
+  source?: NotificationRecord["source"];
 }
+
+export const formatNotificationSource = (source?: NotificationRecord["source"]) =>
+  [source?.repository, source?.pullNumber ? `#${source.pullNumber}` : undefined, source?.branch]
+    .filter(Boolean)
+    .join(" · ");
 
 const recentNotifications = new Set<string>();
 const notificationQueue: ManagedNotification[] = [];
@@ -73,10 +81,12 @@ export const clearNotificationHistory = async () => {
 const createRecord = (notification: ManagedNotification): NotificationRecord => ({
   id: `${Date.now()}-${notificationSequence++}`,
   type: notification.type ?? "system",
+  ...(notification.tone ? { tone: notification.tone } : {}),
   title: notification.title,
   body: notification.body,
   createdAt: new Date().toISOString(),
   ...(notification.url ? { url: notification.url } : {}),
+  ...(notification.source ? { source: notification.source } : {}),
   read: false,
 });
 
@@ -121,7 +131,9 @@ async function processQueue() {
     const record = await persistNotification(notification);
     const electronNotification = new Notification({
       title: notification.title,
-      body: notification.body,
+      body: [formatNotificationSource(notification.source), notification.body]
+        .filter(Boolean)
+        .join("\n"),
     });
     activeNotifications.push(electronNotification);
 

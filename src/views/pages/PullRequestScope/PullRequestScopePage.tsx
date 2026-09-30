@@ -69,7 +69,7 @@ export const PullRequestScopePage = ({
           }
         />
       ) : (
-        <Flex direction="column" gap="6" p="4">
+        <Flex direction="column" gap="3" p="4">
           {data.cards.map((card) => (
             <Box key={card.pr.id} width="100%">
               <PullRequestCard
@@ -84,6 +84,8 @@ export const PullRequestScopePage = ({
                 branchName={card.pr.head.ref}
                 repositoryName={card.pr.head.repo?.name ?? card.pr.base.repo.name}
                 updatedAt={card.pr.updated_at}
+                latestFeedbackAt={card.latestFeedbackAt}
+                latestMention={card.latestMention}
                 actionsByName={card.actionByName}
                 pullRequestLink={card.pullRequestUrl}
                 labels={card.labels}

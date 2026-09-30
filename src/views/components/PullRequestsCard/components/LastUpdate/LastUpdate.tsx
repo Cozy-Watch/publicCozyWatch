@@ -1,4 +1,4 @@
-import { Text } from "@radix-ui/themes";
+import { Tooltip } from "@radix-ui/themes";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 
@@ -6,20 +6,12 @@ dayjs.extend(relativeTime);
 
 interface Props {
   updatedAt: string;
-  isCompact?: boolean;
 }
 
-export const LastUpdate = ({ updatedAt, isCompact }: Props) => {
-  return (
-    <Text
-      className={
-        isCompact
-          ? "mb-text-color"
-          : "mb-text-color bright-background-text-shadow"
-      }
-      size="1"
-    >
-      Last Updated: {dayjs(updatedAt).toNow()}
-    </Text>
-  );
-};
+export const LastUpdate = ({ updatedAt }: Props) => (
+  <Tooltip content={`Updated ${dayjs(updatedAt).format("MMM D, YYYY [at] HH:mm")}`}>
+    <time className="pr-card-time" dateTime={updatedAt}>
+      {dayjs(updatedAt).fromNow()}
+    </time>
+  </Tooltip>
+);

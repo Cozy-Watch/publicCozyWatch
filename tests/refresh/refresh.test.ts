@@ -39,6 +39,9 @@ describe("production refresh with mocked HTTP (characterization, not optimized b
       expect(cold.metrics.requestsByOperation).toEqual({
         "/rate_limit": 1, "pull-list-requests": 7, "issues-list-comments": 208,
         "pull-listReview-requests": 208, "pull-actions-requests": 15,
+        ...(!isBaseline ? Object.fromEntries(
+          github.repositories.map((repo) => [`/repos/${repo.owner}/${repo.name}/pulls/comments`, 1]),
+        ) : {}),
       });
       expect(cold.metrics.maxConcurrency).toBeGreaterThan(1);
       expect(cold.metrics.maxConcurrency).toBeLessThanOrEqual(10);
@@ -58,7 +61,7 @@ describe("production refresh with mocked HTTP (characterization, not optimized b
       const warm = await harness.run("reported/unchanged");
       reports.push(warm.metrics);
       expect(warm.data.flatPullRequests).toHaveLength(208);
-      expect(warm.metrics.requests).toBe(429);
+      expect(warm.metrics.requests).toBe(isBaseline ? 429 : 435);
       // Baseline shares one review ETag between PRs. Accidental matches depend on completion order.
       if (isBaseline) {
         expect(warm.metrics.notModified).toBeGreaterThanOrEqual(220);
@@ -107,6 +110,7 @@ describe("production refresh with mocked HTTP (characterization, not optimized b
       expect(result.metrics.requestsByOperation).toEqual({
         "/rate_limit": 1, "pull-list-requests": 1, "issues-list-comments": 2,
         "pull-listReview-requests": 2, "pull-actions-requests": 3,
+        ...(!isBaseline ? { "/repos/synthetic-company/service-1/pulls/comments": 1 } : {}),
       });
       // Known defects, intentionally characterized rather than fixed in package 1.
       expect(result.data.reviewPerRepoPerPullNumber["service-1"]["1"].map((review) => review.id))

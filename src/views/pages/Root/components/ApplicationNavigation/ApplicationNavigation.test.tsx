@@ -66,7 +66,7 @@ describe("ApplicationNavigation", () => {
   it("renders the primary links with capped pull-request counts", async () => {
     await renderNavigation("/overview");
 
-    expect(container.textContent).toContain("Home");
+    expect(container.textContent).toContain("Overview");
     expect(container.textContent).toContain("My Pull Requests");
     expect(container.querySelector('a[href="/teamPullRequest"]')?.textContent).toContain("Relevant Pull Requests");
     expect(container.textContent).toContain("Mentions");

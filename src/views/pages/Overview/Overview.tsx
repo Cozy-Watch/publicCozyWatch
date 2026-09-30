@@ -86,6 +86,8 @@ const OverviewContent = () => {
             waitingReviews,
             labels,
             assignees,
+            latestFeedbackAt,
+            latestMention,
           }) => {
             return (
               <Box width="100%" key={pr.id}>
@@ -101,6 +103,8 @@ const OverviewContent = () => {
                   branchName={pr.head.ref}
                   repositoryName={pr.head.repo.name}
                   updatedAt={pr.updated_at}
+                  latestFeedbackAt={latestFeedbackAt}
+                  latestMention={latestMention}
                   actionsByName={actionByName}
                   pullRequestLink={pullRequestUrl}
                   labels={labels}

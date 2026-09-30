@@ -6,9 +6,7 @@ import {
   Flex,
   Spinner,
   Tabs,
-  Text,
 } from "@radix-ui/themes";
-import { useEffect, useState } from "react";
 import { useIsAuthenticatedQuery } from "../../api/useIsAuthenticatedQuery";
 import { Header } from "./components/Header/Header";
 import { HeaderEmpty } from "./components/Header/Header.empty";
@@ -17,41 +15,10 @@ import { Team } from "./Tabs/Team/Team";
 import { useMenubar } from "./useMenubar";
 import { useMenubarDensityQuery } from "../AppSettings/api/useMenubarDensityQuery";
 
-const VersionFooter = ({ version }: { version: string | null }) => {
-  if (!version) return null;
-
-  return (
-    <Flex flexShrink="0" justify="center" py="1">
-      <Text size="1" color="gray">
-        v{version}
-      </Text>
-    </Flex>
-  );
-};
-
 export const Menubar = () => {
   const { error, data, isPending } = useMenubar();
   const { data: isAuthenticated } = useIsAuthenticatedQuery();
   const { data: menubarDensity } = useMenubarDensityQuery();
-  const [appVersion, setAppVersion] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    void window.electronAPI.application
-      .getVersion()
-      .then((version) => {
-        if (isMounted) setAppVersion(version);
-      })
-      .catch(() => {
-        // Keep the footer empty if the version cannot be read.
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   const isCompact = menubarDensity === "compact";
 
   if (isPending || isAuthenticated === false) {
@@ -90,7 +57,6 @@ export const Menubar = () => {
             <Spinner size="3" />
           )}
         </Flex>
-        <VersionFooter version={appVersion} />
       </Flex>
     );
   }
@@ -127,7 +93,6 @@ export const Menubar = () => {
             <Callout.Text>{error.message}</Callout.Text>
           </Callout.Root>
         </Flex>
-        <VersionFooter version={appVersion} />
       </Flex>
     );
   }
@@ -207,7 +172,6 @@ export const Menubar = () => {
             <Team pullRequests={teamPullRequests} isCompact={isCompact} />
           </Flex>
         </Tabs.Content>
-        <VersionFooter version={appVersion} />
       </Flex>
     </Tabs.Root>
   );

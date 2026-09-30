@@ -9,7 +9,7 @@ export const emptyCache = (): CacheData => ({
   etagPerRepo: {}, pullRequestsPerRepo: {}, reviewPerRepoPerPullNumber: {}, actionsPerRepo: {},
   pullRequestAddedOrRemoved: { added: [], removed: [] },
   reviewUpdateList: { newReview: [], reviewChanged: [] }, CIStatusUpdatePerRepo: {},
-  mentions: {}, flatPullRequests: [],
+  mentions: {}, reviewCommentsPerRepo: {}, flatPullRequests: [],
 });
 
 export const createHarness = async (github: MockGithub) => {

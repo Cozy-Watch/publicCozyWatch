@@ -1,220 +1,80 @@
 import {
-  CheckCircleFillIcon,
+  CheckCircleIcon,
   ChevronDownIcon,
+  ClockIcon,
   CodeReviewIcon,
-  EyeClosedIcon,
-  XCircleFillIcon,
+  CommentIcon,
+  XCircleIcon,
 } from "@primer/octicons-react";
-import { Flex, Popover, Text } from "@radix-ui/themes";
-import { ReviewAvatar } from "./components/ReviewAvatar/ReviewAvatar";
+import { Avatar, Flex, Popover, Text } from "@radix-ui/themes";
 
 interface Props {
-  isCompact?: boolean;
   waitingReviews: number;
   reviewsGroupedbyUser?: Record<
     string,
-    {
-      state: string;
-      userAvatar: string;
-      userName: string;
-    }
+    { state: string; userAvatar: string; userName: string }
   >;
 }
 
-export const Review = ({
-  reviewsGroupedbyUser,
-  waitingReviews,
-  isCompact,
-}: Props) => {
-  if (!reviewsGroupedbyUser) {
-    return null;
-  }
+const reviewStates = {
+  APPROVED: { label: "Approved", tone: "success", Icon: CheckCircleIcon },
+  CHANGES_REQUESTED: { label: "Changes requested", tone: "danger", Icon: XCircleIcon },
+  NO_FEEDBACK: { label: "Pending", tone: "pending", Icon: ClockIcon },
+  COMMENTED: { label: "Commented", tone: "neutral", Icon: CommentIcon },
+  DISMISSED: { label: "Dismissed", tone: "neutral", Icon: CodeReviewIcon },
+};
 
-  if (
-    Object.values(reviewsGroupedbyUser).length === 0 &&
-    waitingReviews === 0
-  ) {
-    return null;
-  }
-
-  const reviews = Object.values(reviewsGroupedbyUser).reduce<{
-    approved: string[];
-    changesRequested: string[];
-    waitingFor: string[];
-  }>(
-    (acc, review) => {
-      const { state, userName } = review;
-
-      return {
-        ...acc,
-        approved: [
-          ...acc.approved,
-          ...(state === "APPROVED" ? [userName] : []),
-        ],
-        changesRequested: [
-          ...acc.changesRequested,
-          ...(state === "CHANGES_REQUESTED" ? [userName] : []),
-        ],
-        waitingFor: [
-          ...acc.waitingFor,
-          ...(state !== "APPROVED" && state !== "CHANGES_REQUESTED"
-            ? [userName]
-            : []),
-        ],
-      };
-    },
-    { approved: [], changesRequested: [], waitingFor: [] },
+export const Review = ({ reviewsGroupedbyUser, waitingReviews }: Props) => {
+  const reviews = Object.values(reviewsGroupedbyUser ?? {});
+  const approved = reviews.filter(({ state }) => state === "APPROVED").length;
+  const changes = reviews.filter(({ state }) => state === "CHANGES_REQUESTED").length;
+  const pending = Math.max(
+    waitingReviews,
+    reviews.filter(({ state }) => state === "NO_FEEDBACK").length,
   );
 
-  if (isCompact) {
-    if (
-      reviews.approved.length === 0 &&
-      reviews.changesRequested.length === 0 &&
-      reviews.waitingFor.length === 0
-    ) {
-      return null;
-    }
+  if (reviews.length === 0 && pending === 0) return null;
 
-    return (
-      <Flex align="center" gap="1">
-        <Popover.Root>
-          <Popover.Trigger>
-            <Text size="1">
-              <Flex align="center" gap="1">
-                <Flex width="12" height="12" className="mb-text-color-light">
-                  <CodeReviewIcon size={12} />
-                </Flex>
-
-                <Text className="mb-text-color-heading">Reviews:</Text>
-
-                {reviews.waitingFor.map((userName, index) => (
-                  <Flex key={index} align="center" justify="between" gap="1">
-                    <Text className="mb-text-color-light" size="1">
-                      <Flex width="12" height="12">
-                        <EyeClosedIcon size={12} />
-                      </Flex>
-                    </Text>
-                  </Flex>
-                ))}
-
-                {reviews.approved.map((userName, index) => (
-                  <Flex key={index} align="center" justify="between" gap="1">
-                    <Text className="mb-text-color-light" size="1">
-                      <Flex width="12" height="12">
-                        <CheckCircleFillIcon size={12} />
-                      </Flex>
-                    </Text>
-                  </Flex>
-                ))}
-
-                {reviews.changesRequested.map((userName, index) => (
-                  <Flex
-                    style={{ marginLeft: index === 0 ? 0 : `-${index * 8}px` }}
-                  >
-                    <Text className="mb-text-color-light" size="1">
-                      <Flex width="12" height="12">
-                        <XCircleFillIcon size={12} />
-                      </Flex>
-                    </Text>
-                  </Flex>
-                ))}
-
-                <Flex width="12" height="12" className="mb-text-color-light">
-                  <ChevronDownIcon size={12} />
-                </Flex>
-              </Flex>
-            </Text>
-          </Popover.Trigger>
-
-          <Popover.Content
-            style={{
-              background:
-                "color-mix(in srgb, var(--accent-1) 95%, transparent)",
-              border: "1px solid var(--gray-1)",
-            }}
-          >
-            <Flex justify="start" width="100%" mb="3">
-              <Text
-                size="1"
-                weight="medium"
-                className="bright-background-text-shadow"
-                style={{ color: "var(--gray-a11)" }}
-              >
-                Reviews
-              </Text>
-            </Flex>
-
-            <Flex gap="3" direction="column">
-              {reviews.waitingFor.map((userName, index) => (
-                <Flex key={index} align="center" justify="between" gap="1">
-                  <Text color="gray" size="1">
-                    <Flex align="center" gap="2">
-                      <Flex width="12" height="12">
-                        <EyeClosedIcon size={12} />
-                      </Flex>
-
-                      {userName}
-                    </Flex>
-                  </Text>
-                </Flex>
-              ))}
-
-              {reviews.approved.map((userName, index) => (
-                <Flex key={index} align="center" justify="between" gap="1">
-                  <Text color="green" size="1">
-                    <Flex align="center" gap="2">
-                      <Flex width="12" height="12">
-                        <CheckCircleFillIcon size={12} />
-                      </Flex>
-
-                      {userName}
-                    </Flex>
-                  </Text>
-                </Flex>
-              ))}
-
-              {reviews.changesRequested.map((userName, index) => (
-                <Flex
-                  style={{ marginLeft: index === 0 ? 0 : `-${index * 8}px` }}
-                >
-                  <Text color="ruby" size="1">
-                    <Flex align="center" gap="2">
-                      <Flex width="12" height="12">
-                        <XCircleFillIcon size={12} />
-                      </Flex>
-                      {userName}
-                    </Flex>
-                  </Text>
-                </Flex>
-              ))}
-            </Flex>
-          </Popover.Content>
-        </Popover.Root>
-      </Flex>
-    );
-  }
+  const tone = changes > 0 ? "danger" : pending > 0 ? "pending" : approved > 0 ? "success" : "neutral";
+  const Icon = changes > 0 ? XCircleIcon : pending > 0 ? ClockIcon : approved > 0 ? CheckCircleIcon : CodeReviewIcon;
+  const label = changes > 0
+    ? "Changes requested"
+    : pending > 0
+      ? `${pending} pending`
+      : approved > 0
+        ? `${approved} approval${approved === 1 ? "" : "s"}`
+        : "Reviewed";
 
   return (
-    <Flex align="center" gap="3">
-      {Object.values(reviewsGroupedbyUser).map(
-        ({ state, userAvatar, userName }, index) => {
-          return (
-            <ReviewAvatar
-              key={index}
-              state={state}
-              userAvatar={userAvatar}
-              userName={userName}
-              isFirst={index === 0}
-            />
-          );
-        },
-      )}
-
-      {waitingReviews >= 1 && (
-        <Text size="1" className="inverse-accent-text-shadow mb-text-color">
-          Awaiting {waitingReviews} approval{waitingReviews === 1 ? "" : "s"}
-        </Text>
-      )}
-    </Flex>
+    <Popover.Root>
+      <Popover.Trigger>
+        <button type="button" className="pr-status" data-tone={tone} aria-label={`Reviews: ${label}`}>
+          <Icon size={14} aria-hidden="true" />
+          {label}
+          <ChevronDownIcon size={12} aria-hidden="true" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Content width="300px" className="pr-popover">
+        <Flex direction="column" gap="3">
+          <Text size="2" weight="medium">Reviews</Text>
+          {reviews.map(({ state, userAvatar, userName }) => {
+            const status = reviewStates[state as keyof typeof reviewStates] ?? reviewStates.COMMENTED;
+            return (
+              <Flex key={userName} align="center" gap="2">
+                <Avatar src={userAvatar} fallback={userName?.slice(0, 2) || "?"} size="1" radius="full" />
+                <Text size="1" className="pr-review-name">{userName}</Text>
+                <span className="pr-review-state" data-tone={status.tone}>
+                  <status.Icon size={12} aria-hidden="true" />
+                  {status.label}
+                </span>
+              </Flex>
+            );
+          })}
+          {pending > 0 && (
+            <Text size="1" color="gray">Waiting for {pending} review{pending === 1 ? "" : "s"}</Text>
+          )}
+        </Flex>
+      </Popover.Content>
+    </Popover.Root>
   );
 };

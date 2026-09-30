@@ -68,7 +68,7 @@ export function estimateFullRefreshReserve(
     const pulls = Object.values(
       cache.pullRequestsPerRepo[repo.name] || {},
     ).flat();
-    requests += Math.max(1, Math.ceil(pulls.length / 100)) + 10;
+    requests += Math.max(1, Math.ceil(pulls.length / 100)) + 11;
     for (const pr of pulls) {
       const reviews =
         cache.reviewPerRepoPerPullNumber[repo.name]?.[pr.number]?.length || 0;
