@@ -1,9 +1,11 @@
 import { Card, Flex, Switch, Text } from "@radix-ui/themes";
 import Logger from "electron-log";
+import { useState } from "react";
 import { useMenubarDensityMutation } from "../AppSettings/api/useMenubarDensityMutation";
 import { useMenubarDensityQuery } from "../AppSettings/api/useMenubarDensityQuery";
 
 export const MenuBarSettings = () => {
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const { data: menubarDensity } = useMenubarDensityQuery();
   const { mutateAsync: setMenubarDensity } = useMenubarDensityMutation();
 
@@ -29,18 +31,29 @@ export const MenuBarSettings = () => {
               size="1"
               checked={menubarDensity === "compact"}
               onCheckedChange={async (checked) => {
+                setSettingsError(null);
                 try {
                   await setMenubarDensity(checked ? "compact" : "default");
                 } catch (error) {
                   Logger.error("[MenuBarSettings] Error toggling density", {
                     error,
                   });
+                  setSettingsError(
+                    error instanceof Error
+                      ? error.message
+                      : "Unable to update menu bar settings.",
+                  );
                 }
               }}
               aria-label="Compact menu bar view"
             />
           </Flex>
         </Card>
+        {settingsError && (
+          <Text role="alert" color="red" size="2">
+            {settingsError}
+          </Text>
+        )}
       </Flex>
     </Flex>
   );

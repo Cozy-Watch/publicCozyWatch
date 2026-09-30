@@ -38,7 +38,9 @@ declare global {
   interface Window {
     electronAPI: {
       application: {
-        setApplicationAppearance: (appearance: Appearance | null) => void;
+        setApplicationAppearance: (
+          appearance: Appearance | null,
+        ) => Promise<Appearance | null>;
         getApplicationAppearance: () => Promise<Appearance | null>;
         setApplicationAccentColor: (
           accentColor: AccentColor,
@@ -75,7 +77,9 @@ declare global {
         removeOnSignUser: (handler: IpcListener<boolean>) => void;
 
         getNotificationsSettings: () => Promise<NotificationSettingsPerKey>;
-        setToggleAllNotifications: (enabled: boolean) => Promise<void>;
+        setToggleAllNotifications: (
+          enabled: boolean,
+        ) => Promise<NotificationSettingsPerKey>;
         setNotificationSetting: ({
           checked,
           key,

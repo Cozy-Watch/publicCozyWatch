@@ -11,18 +11,19 @@ export const useAppearanceMutation = () => {
       );
     },
 
-    onSuccess: (data, appearance) => {
-      queryClient.setQueryData(queryKey, (oldData: Appearance | undefined) => {
-        if (!oldData) {
-          return oldData;
-        }
-
-        return appearance;
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: queryKey,
-      });
+    onMutate: async (appearance) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previousAppearance = queryClient.getQueryData<Appearance | null>(queryKey);
+      const hadQuery = queryClient.getQueryState(queryKey) !== undefined;
+      queryClient.setQueryData(queryKey, appearance);
+      return { previousAppearance, hadQuery };
+    },
+    onError: (_error, _appearance, context) => {
+      if (context?.hadQuery) {
+        queryClient.setQueryData(queryKey, context.previousAppearance);
+        return;
+      }
+      queryClient.removeQueries({ queryKey, exact: true });
     },
   });
 };

@@ -930,9 +930,13 @@ handleRendererInvoke("set-application-appearance", async (_, appearance) => {
 
   log.info("[IPC] set-application-appearance", { appearance });
 
-  ipcMain.emit("dispatch-application-appearance-update", null, appearance);
+  const saved = await storeData({ name: "appearance", data: appearance });
+  if (!saved) {
+    throw new Error("Unable to save appearance.");
+  }
 
-  return storeData({ name: "appearance", data: appearance });
+  ipcMain.emit("dispatch-application-appearance-update", null, appearance);
+  return appearance;
 });
 
 handleRendererInvoke("get-application-appearance", async () => {
@@ -1027,7 +1031,11 @@ handleRendererInvoke(
 handleRendererInvoke("get-application-start-at-login", async () => {
   log.info("[IPC] get-application-start-at-login");
 
-  return getData("open_at_login");
+  if (process.platform === "darwin" || process.platform === "win32") {
+    return app.getLoginItemSettings().openAtLogin;
+  }
+
+  return (await getData("open_at_login")) ?? false;
 });
 
 // ---- Menubar Density ----
@@ -1048,7 +1056,10 @@ handleRendererInvoke("set-menubar-density", async (_, density: unknown) => {
   log.info("[IPC] set-menubar-density", validatedDensity);
   const prev = await getData("appSettings");
   const newSettings = { ...prev, menubarDensity: validatedDensity };
-  await storeData({ name: "appSettings", data: newSettings });
+  const saved = await storeData({ name: "appSettings", data: newSettings });
+  if (!saved) {
+    throw new Error("Unable to save menu bar settings.");
+  }
   ipcMain.emit("dispatch-menubar-density-update", null, validatedDensity);
   return validatedDensity;
 });
@@ -1063,12 +1074,39 @@ handleRendererInvoke(
 
     log.info("[IPC] set-application-start-at-login", isStartingAtLogin);
 
-    app.setLoginItemSettings({
-      openAtLogin: isStartingAtLogin,
-    });
+    if (process.platform !== "darwin" && process.platform !== "win32") {
+      throw new Error("Open at login is supported only on macOS and Windows.");
+    }
 
-    log.info("[IPC] set-application-start-at-login", isStartingAtLogin);
-    await storeData({ name: "open_at_login", data: isStartingAtLogin });
+    const previousValue = app.getLoginItemSettings().openAtLogin;
+    try {
+      app.setLoginItemSettings({ openAtLogin: isStartingAtLogin });
+      const actualValue = app.getLoginItemSettings().openAtLogin;
+      if (actualValue !== isStartingAtLogin) {
+        throw new Error(
+          process.platform === "darwin"
+            ? "macOS did not enable this login item. Use the signed and notarized Cozy Watch app, then try again."
+            : "Windows did not update the startup setting. Please try again.",
+        );
+      }
+
+      const saved = await storeData({
+        name: "open_at_login",
+        data: isStartingAtLogin,
+      });
+      if (!saved) {
+        throw new Error("Unable to save the Open at login setting.");
+      }
+
+      return actualValue;
+    } catch (error) {
+      try {
+        app.setLoginItemSettings({ openAtLogin: previousValue });
+      } catch (restoreError) {
+        log.warn("[IPC] unable to restore start-at-login setting", restoreError);
+      }
+      throw error;
+    }
   },
 );
 

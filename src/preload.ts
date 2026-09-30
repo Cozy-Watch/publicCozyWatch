@@ -33,7 +33,9 @@ type AuthenticationCode = {
 contextBridge.exposeInMainWorld("electronAPI", {
   application: {
     // Application Settings
-    setApplicationAppearance: (appearance: Appearance | null) => {
+    setApplicationAppearance: (
+      appearance: Appearance | null,
+    ): Promise<Appearance | null> => {
       return ipcRenderer.invoke("set-application-appearance", appearance);
     },
     getApplicationAppearance: (): Promise<Appearance | null> => {

@@ -119,25 +119,27 @@ export const Settings = () => {
           </Tabs.List>
 
           <Tabs.Content className="settings-section-panel" value="application">
-            <AppSettings />
+            {selectedSection === "application" ? <AppSettings /> : null}
           </Tabs.Content>
           <Tabs.Content className="settings-section-panel" value="github">
-            <GitHubSettings />
+            {selectedSection === "github" ? <GitHubSettings /> : null}
           </Tabs.Content>
           <Tabs.Content className="settings-section-panel" value="repositories">
-            <Repositories />
+            {selectedSection === "repositories" ? <Repositories /> : null}
           </Tabs.Content>
           <Tabs.Content className="settings-section-panel" value="notifications">
-            <NotificationsSettings />
+            {selectedSection === "notifications" ? (
+              <NotificationsSettings />
+            ) : null}
           </Tabs.Content>
           <Tabs.Content className="settings-section-panel" value="menubar">
-            <MenuBarSettings />
+            {selectedSection === "menubar" ? <MenuBarSettings /> : null}
           </Tabs.Content>
           <Tabs.Content className="settings-section-panel" value="license">
-            <LicenseSettings />
+            {selectedSection === "license" ? <LicenseSettings /> : null}
           </Tabs.Content>
           <Tabs.Content className="settings-section-panel" value="feedback">
-            <FeedbackSettings />
+            {selectedSection === "feedback" ? <FeedbackSettings /> : null}
           </Tabs.Content>
         </Flex>
       </Tabs.Root>

@@ -1,11 +1,13 @@
 import { Box, Card, Flex, Switch, Text } from "@radix-ui/themes";
 import Logger from "electron-log";
+import { useState } from "react";
 import { useNotificationsMutation } from "../AppSettings/api/useNotificationsMutation";
 import { useNotificationQuery } from "../AppSettings/api/useNotificationsQuery";
 import { useToggleAllNotificationsMutation } from "../AppSettings/api/useToggleAllNotificationsMutation";
 import { SettingsSection } from "./SettingsSection";
 
 export const NotificationsSettings = () => {
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const { isPending, data: notifications } = useNotificationQuery();
   const { mutateAsync: toggleNotification } = useNotificationsMutation();
   const { mutateAsync: toggleAllNotifications } =
@@ -43,12 +45,18 @@ export const NotificationsSettings = () => {
                 checked={areAllNotificationsEnabled}
                 disabled={isPending || !notifications}
                 onCheckedChange={async (checked) => {
+                  setSettingsError(null);
                   try {
                     await toggleAllNotifications(checked);
                   } catch (error) {
                     Logger.error("[NotificationsSettings] Error toggling all", {
                       error,
                     });
+                    setSettingsError(
+                      error instanceof Error
+                        ? error.message
+                        : "Unable to update notification settings.",
+                    );
                   }
                 }}
               />
@@ -69,12 +77,18 @@ export const NotificationsSettings = () => {
                         size="1"
                         checked={notification.value}
                         onCheckedChange={async (checked) => {
+                          setSettingsError(null);
                           try {
                             await toggleNotification({ checked, key });
                           } catch (error) {
                             Logger.error(
                               "[NotificationsSettings] Error toggling notification",
                               { error },
+                            );
+                            setSettingsError(
+                              error instanceof Error
+                                ? error.message
+                                : "Unable to update notification settings.",
                             );
                           }
                         }}
@@ -88,6 +102,11 @@ export const NotificationsSettings = () => {
           </Flex>
         </Flex>
       </Card>
+      {settingsError && (
+        <Text role="alert" color="red" size="2">
+          {settingsError}
+        </Text>
+      )}
     </SettingsSection>
   );
 };

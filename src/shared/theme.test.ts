@@ -11,6 +11,10 @@ describe("accent colors", () => {
     }
   });
 
+  it("accepts gray for the retro accent", () => {
+    expect(isAccentColor("gray")).toBe(true);
+  });
+
   it("rejects unsupported values", () => {
     expect(isAccentColor("purple")).toBe(false);
     expect(isAccentColor("Violet")).toBe(false);

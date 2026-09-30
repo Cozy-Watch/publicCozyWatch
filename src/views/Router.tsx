@@ -313,7 +313,7 @@ const RouterContent = ({ isAuthenticated }: { isAuthenticated: boolean }) => {
     <StrictMode>
       <Theme
         accentColor={stateAccentColor ?? DEFAULT_ACCENT_COLOR}
-        radius="large"
+        radius={stateAccentColor === "gray" ? "small" : "large"}
         appearance={appearance}
         style={{ background: "none" }}
       >

@@ -7,6 +7,7 @@ export const ACCENT_COLORS = [
   "green",
   "orange",
   "red",
+  "gray",
 ] as const;
 
 export type AccentColor = (typeof ACCENT_COLORS)[number];

@@ -22,14 +22,46 @@ export const AppSettings = () => {
   >(null);
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
   const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
-  const { data: hasOpenAtLogin } = useOpenAtLoginQuery();
-  const { mutateAsync: saveIsOpenAtLogin } = useOpenAtLoginMutation();
-  const { data: appearance } = useAppearanceQuery();
-  const { mutateAsync: saveAppearance } = useAppearanceMutation();
+  const { data: hasOpenAtLogin, isPending: isOpenAtLoginLoading } = useOpenAtLoginQuery();
+  const {
+    mutateAsync: saveIsOpenAtLogin,
+    isPending: isSavingOpenAtLogin,
+  } = useOpenAtLoginMutation();
+  const { data: appearance, isPending: isAppearanceLoading } = useAppearanceQuery();
+  const {
+    mutateAsync: saveAppearance,
+    isPending: isSavingAppearance,
+  } = useAppearanceMutation();
   const { data: storedAccentColor } = useAccentColorQuery();
   const { mutateAsync: saveAccentColor } = useAccentColorMutation();
   const accentColor = storedAccentColor ?? DEFAULT_ACCENT_COLOR;
+  const appearanceValue = appearance ?? "system";
+
+  const updateOpenAtLogin = async (checked: boolean) => {
+    setSettingsError(null);
+    try {
+      await saveIsOpenAtLogin(checked);
+    } catch (error) {
+      Logger.error("[AppSettings] Error toggling Open At login", { error });
+      setSettingsError(
+        error instanceof Error ? error.message : "Unable to update Open at login.",
+      );
+    }
+  };
+
+  const updateAppearance = async (nextAppearance: Appearance | null) => {
+    setSettingsError(null);
+    try {
+      await saveAppearance(nextAppearance);
+    } catch (error) {
+      Logger.error("[AppSettings] Error updating appearance", { error });
+      setSettingsError(
+        error instanceof Error ? error.message : "Unable to update appearance.",
+      );
+    }
+  };
 
   useEffect(() => {
     void window.electronAPI.application
@@ -75,16 +107,10 @@ export const AppSettings = () => {
             <Text weight="medium">Open at login:</Text>
             <Switch
               size="1"
-              checked={hasOpenAtLogin}
-              onCheckedChange={async (checked) => {
-                try {
-                  await saveIsOpenAtLogin(checked);
-                } catch (error) {
-                  Logger.error("[AppSettings] Error toggling Open At login", {
-                    error,
-                  });
-                }
-              }}
+              aria-label="Open at login"
+              checked={hasOpenAtLogin ?? false}
+              disabled={isOpenAtLoginLoading || isSavingOpenAtLogin}
+              onCheckedChange={(checked) => void updateOpenAtLogin(checked)}
             />
           </Flex>
         </Card>
@@ -95,7 +121,11 @@ export const AppSettings = () => {
               <Text weight="medium">Appearance:</Text>
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger>
-                  <Button variant="surface" style={{ width: 180 }}>
+                  <Button
+                    variant="surface"
+                    style={{ width: 180 }}
+                    disabled={isAppearanceLoading || isSavingAppearance}
+                  >
                     {appearance === Appearance.Light
                       ? "Light"
                       : appearance === Appearance.Dark
@@ -105,19 +135,38 @@ export const AppSettings = () => {
                   </Button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content>
-                  <DropdownMenu.Item
-                    onClick={() => saveAppearance(Appearance.Light)}
+                  <DropdownMenu.RadioGroup
+                    value={appearanceValue}
+                    onValueChange={(value) => {
+                      if (value === "system") {
+                        void updateAppearance(null);
+                        return;
+                      }
+
+                      if (value === Appearance.Light || value === Appearance.Dark) {
+                        void updateAppearance(value);
+                      }
+                    }}
                   >
-                    Light
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item
-                    onClick={() => saveAppearance(Appearance.Dark)}
-                  >
-                    Dark
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item onClick={() => saveAppearance(null)}>
-                    System
-                  </DropdownMenu.Item>
+                    <DropdownMenu.RadioItem
+                      value={Appearance.Light}
+                      disabled={isSavingAppearance}
+                    >
+                      Light
+                    </DropdownMenu.RadioItem>
+                    <DropdownMenu.RadioItem
+                      value={Appearance.Dark}
+                      disabled={isSavingAppearance}
+                    >
+                      Dark
+                    </DropdownMenu.RadioItem>
+                    <DropdownMenu.RadioItem
+                      value="system"
+                      disabled={isSavingAppearance}
+                    >
+                      System
+                    </DropdownMenu.RadioItem>
+                  </DropdownMenu.RadioGroup>
                 </DropdownMenu.Content>
               </DropdownMenu.Root>
             </Flex>
@@ -147,6 +196,11 @@ export const AppSettings = () => {
                         Logger.error("[AppSettings] Error updating accent color", {
                           error,
                         });
+                        setSettingsError(
+                          error instanceof Error
+                            ? error.message
+                            : "Unable to update accent color.",
+                        );
                       });
                     }}
                   >
@@ -173,6 +227,12 @@ export const AppSettings = () => {
           </Flex>
         </Card>
       </Grid>
+
+      {settingsError && (
+        <Text role="alert" color="red" size="2">
+          {settingsError}
+        </Text>
+      )}
 
       {(diagnosticsEnabled || diagnosticsStatusError) && (
         <Card className="accent-shadow-low">

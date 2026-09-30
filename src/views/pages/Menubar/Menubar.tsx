@@ -8,6 +8,7 @@ import {
   Tabs,
 } from "@radix-ui/themes";
 import { useIsAuthenticatedQuery } from "../../api/useIsAuthenticatedQuery";
+import { useState } from "react";
 import { Header } from "./components/Header/Header";
 import { HeaderEmpty } from "./components/Header/Header.empty";
 import { My } from "./Tabs/My/My";
@@ -16,6 +17,7 @@ import { useMenubar } from "./useMenubar";
 import { useMenubarDensityQuery } from "../AppSettings/api/useMenubarDensityQuery";
 
 export const Menubar = () => {
+  const [selectedTab, setSelectedTab] = useState<"mine" | "team">("mine");
   const { error, data, isPending } = useMenubar();
   const { data: isAuthenticated } = useIsAuthenticatedQuery();
   const { data: menubarDensity } = useMenubarDensityQuery();
@@ -105,7 +107,13 @@ export const Menubar = () => {
   const { avatarUrl, name, login } = headerData;
 
   return (
-    <Tabs.Root defaultValue="mine" asChild>
+    <Tabs.Root
+      value={selectedTab}
+      onValueChange={(value) => {
+        if (value === "mine" || value === "team") setSelectedTab(value);
+      }}
+      asChild
+    >
       <Flex direction="column" height="100%" overflow="hidden">
         <Flex
           direction="column"
@@ -157,7 +165,9 @@ export const Menubar = () => {
             overflowY="auto"
             overflowX="hidden"
           >
-            <My pullRequests={myPullRequests} isCompact={isCompact} />
+            {selectedTab === "mine" ? (
+              <My pullRequests={myPullRequests} isCompact={isCompact} />
+            ) : null}
           </Flex>
         </Tabs.Content>
         <Tabs.Content value="team" asChild>
@@ -169,7 +179,9 @@ export const Menubar = () => {
             overflowY="auto"
             overflowX="hidden"
           >
-            <Team pullRequests={teamPullRequests} isCompact={isCompact} />
+            {selectedTab === "team" ? (
+              <Team pullRequests={teamPullRequests} isCompact={isCompact} />
+            ) : null}
           </Flex>
         </Tabs.Content>
       </Flex>
