@@ -102,9 +102,9 @@ export const AppSettings = () => {
   return (
     <SettingsSection>
       <Grid columns="1fr" gap="4">
-        <Card className="accent-shadow-low">
+        <Card className="settings-card">
           <Flex justify="between" align="center">
-            <Text weight="medium">Open at login:</Text>
+            <Text className="settings-control-label">Open at login:</Text>
             <Switch
               size="1"
               aria-label="Open at login"
@@ -115,10 +115,10 @@ export const AppSettings = () => {
           </Flex>
         </Card>
 
-        <Card className="accent-shadow-low">
+        <Card className="settings-card">
           <Flex direction="column" gap="3">
             <Flex align="center" justify="between">
-              <Text weight="medium">Appearance:</Text>
+              <Text className="settings-control-label">Appearance:</Text>
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger>
                   <Button
@@ -171,7 +171,7 @@ export const AppSettings = () => {
               </DropdownMenu.Root>
             </Flex>
             <Flex align="center" justify="between">
-              <Text weight="medium">Accent color:</Text>
+              <Text className="settings-control-label">Accent color:</Text>
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger>
                   <Button variant="surface" style={{ width: 180 }}>
@@ -235,11 +235,11 @@ export const AppSettings = () => {
       )}
 
       {(diagnosticsEnabled || diagnosticsStatusError) && (
-        <Card className="accent-shadow-low">
+        <Card className="settings-card">
           <Flex align="center" justify="between" gap="3">
             <Flex direction="column" gap="1">
-              <Text weight="medium">Performance diagnostics</Text>
-              <Text size="2" color="gray">
+              <Text className="settings-card-title">Performance diagnostics</Text>
+              <Text size="2" className="settings-card-description">
                 Export redacted startup, responsiveness, and resource metrics
                 for support.
               </Text>
@@ -255,7 +255,9 @@ export const AppSettings = () => {
               )}
             </Flex>
             <Button
+              className="settings-action"
               variant="outline"
+              style={{ width: 180 }}
               onClick={() => void exportDiagnostics()}
               disabled={isExportingDiagnostics}
             >

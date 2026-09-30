@@ -3,17 +3,13 @@ import { LinkExternalIcon } from "@primer/octicons-react";
 import { Button, Card, Flex, Text } from "@radix-ui/themes";
 import { SettingsSection } from "./SettingsSection";
 
-const feedbackCardStyle = {
-  background:
-    "linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-1))",
-};
-
 export const FeedbackSettings = () => (
   <SettingsSection>
-    <Card className="accent-shadow-low" style={feedbackCardStyle}>
+    <Card className="settings-card">
       <Flex align="center" justify="between" gap="3">
-        <Text weight="medium">Feedback</Text>
+        <Text className="settings-card-title">Feedback</Text>
         <Button
+          style={{ width: 180 }}
           variant="outline"
           onClick={() => {
             window.electronAPI.openExternalLink("mailto:tiago@cozywatch.com");
@@ -24,10 +20,11 @@ export const FeedbackSettings = () => (
         </Button>
       </Flex>
     </Card>
-    <Card className="accent-shadow-low" style={feedbackCardStyle}>
+    <Card className="settings-card">
       <Flex align="center" justify="between" gap="3">
-        <Text weight="medium">See what’s new</Text>
+        <Text className="settings-card-title">See what’s new</Text>
         <Button
+          style={{ width: 180 }}
           variant="outline"
           onClick={() => {
             window.electronAPI.openExternalLink(

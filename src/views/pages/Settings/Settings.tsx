@@ -39,6 +39,7 @@ export const Settings = () => {
 
   return (
     <Flex
+      className="settings-page"
       direction="column"
       width="100%"
       height="100%"

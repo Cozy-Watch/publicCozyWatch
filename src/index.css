@@ -275,6 +275,86 @@
   outline-offset: -3px;
 }
 
+.settings-page {
+  --default-font-family: var(--code-font-family);
+  --heading-font-family: var(--code-font-family);
+  font-family: var(--code-font-family);
+}
+
+.settings-section-panel {
+  --font-size-1: calc(11px * var(--scaling));
+  --font-size-2: calc(12px * var(--scaling));
+  --font-size-3: calc(13px * var(--scaling));
+  --font-size-4: calc(14px * var(--scaling));
+  --font-size-5: calc(16px * var(--scaling));
+  --font-size-6: calc(18px * var(--scaling));
+  --font-size-7: calc(21px * var(--scaling));
+  --font-size-8: calc(26px * var(--scaling));
+  --font-size-9: calc(38px * var(--scaling));
+  --default-font-size: var(--font-size-2);
+  --line-height-1: calc(15px * var(--scaling));
+  --line-height-2: calc(17px * var(--scaling));
+  --line-height-3: calc(19px * var(--scaling));
+  --line-height-4: calc(21px * var(--scaling));
+  --line-height-5: calc(23px * var(--scaling));
+  --line-height-6: calc(26px * var(--scaling));
+  --line-height-7: calc(29px * var(--scaling));
+  --line-height-8: calc(35px * var(--scaling));
+  --line-height-9: calc(48px * var(--scaling));
+}
+
+.settings-section-panel .rt-Card {
+  --card-background-color: color-mix(
+    in srgb,
+    var(--accent-5) 30%,
+    var(--color-panel-solid)
+  ) !important;
+  --card-border-width: 0px;
+  --base-card-classic-box-shadow-inner: none;
+  --base-card-classic-box-shadow-outer: none;
+  --base-card-surface-box-shadow: none;
+  box-shadow: none;
+}
+
+:is(.light, .light-theme) .settings-section-panel .rt-Card {
+  --card-background-color: color-mix(
+    in srgb,
+    var(--accent-5) 40%,
+    var(--color-panel-solid)
+  ) !important;
+}
+
+.settings-section-panel .rt-Card::after {
+  box-shadow: none !important;
+}
+
+.settings-section-panel .settings-card-title,
+.settings-section-panel .settings-control-label {
+  font-size: var(--font-size-2);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-2);
+}
+
+.settings-section-panel .settings-card-description {
+  color: var(--gray-11);
+  font-size: var(--font-size-2);
+  font-weight: var(--font-weight-regular);
+  line-height: 1.45;
+}
+
+.settings-section-panel .settings-repository-name {
+  font-size: var(--font-size-1);
+  line-height: var(--line-height-1);
+}
+
+.settings-section-panel .settings-search input {
+  font-size: var(--font-size-3);
+}
+
+.settings-section-panel .settings-action {
+  font-size: var(--font-size-3);
+}
+
 .rt-Flex.settings-layout {
   display: grid;
   grid-template-columns: 190px minmax(0, 1fr);

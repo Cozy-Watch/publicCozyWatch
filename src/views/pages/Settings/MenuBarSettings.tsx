@@ -12,17 +12,11 @@ export const MenuBarSettings = () => {
   return (
     <Flex direction="column" overflow="auto" height="100%" position="relative" pb="9">
       <Flex width="100%" direction="column" gap="4" p="4" flexGrow="1">
-        <Card
-          className="accent-shadow-low"
-          style={{
-            background:
-              "linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-1))",
-          }}
-        >
+        <Card className="settings-card">
           <Flex justify="between" align="center" gap="4">
             <Flex direction="column" gap="1">
-              <Text weight="medium">Compact view</Text>
-              <Text size="2" color="gray">
+              <Text className="settings-card-title">Compact view</Text>
+              <Text size="2" className="settings-card-description">
                 Uses a smaller header, text, and pull request spacing to fit more
                 in the menu bar. Turn it off for larger, easier-to-read cards.
               </Text>

@@ -25,13 +25,7 @@ export const GitHubSettings = () => {
 
   return (
     <SettingsSection>
-      <Card
-        className="accent-shadow-low"
-        style={{
-          background:
-            "linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-1))",
-        }}
-      >
+      <Card className="settings-card">
         <Flex align="center" justify="between">
           <Flex align="center" gap="2">
             {user ? (
@@ -45,9 +39,9 @@ export const GitHubSettings = () => {
               <MarkGithubIcon size={16} />
             )}
             <Flex direction="column">
-              <Text weight="medium">GitHub connection</Text>
+              <Text className="settings-control-label">GitHub connection</Text>
               {user && (
-                <Text size="2" color="gray">
+                <Text size="2" className="settings-card-description">
                   Connected as {user.login}
                 </Text>
               )}

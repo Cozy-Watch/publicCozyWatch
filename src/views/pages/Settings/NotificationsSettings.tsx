@@ -19,89 +19,104 @@ export const NotificationsSettings = () => {
 
   return (
     <SettingsSection>
-      <Card
-        className="accent-shadow-low"
-        style={{
-          background:
-            "linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-1))",
-        }}
-      >
-        <Flex direction="column" gap="3">
+      <Card className="settings-card">
+        <Flex gap="3" justify="between" align="center">
           <Flex direction="column" gap="2">
-            <Text weight="medium">Notifications</Text>
-            <Text size="2" weight="light">
+            <Text
+              as="label"
+              size="2"
+              className="settings-control-label"
+              htmlFor="notifications-enable-all"
+            >
+              Enable All
+            </Text>
+            <Text size="2" className="settings-card-description">
+              Turn every notification type on or off.
+            </Text>
+          </Flex>
+          <Switch
+            id="notifications-enable-all"
+            size="1"
+            checked={areAllNotificationsEnabled}
+            disabled={isPending || !notifications}
+            onCheckedChange={async (checked) => {
+              setSettingsError(null);
+              try {
+                await toggleAllNotifications(checked);
+              } catch (error) {
+                Logger.error("[NotificationsSettings] Error toggling all", {
+                  error,
+                });
+                setSettingsError(
+                  error instanceof Error
+                    ? error.message
+                    : "Unable to update notification settings.",
+                );
+              }
+            }}
+          />
+        </Flex>
+      </Card>
+
+      <Card className="settings-card">
+        <Flex direction="column" gap="4">
+          <Flex direction="column" gap="1">
+            <Text className="settings-card-title">Notifications</Text>
+            <Text size="2" className="settings-card-description">
               What notifications do you want to receive?
             </Text>
           </Flex>
 
-          <Flex direction="column" gap="2">
-            <Flex gap="2" justify="between">
-              <Text as="label" size="2" htmlFor="notifications-enable-all">
-                Enable All:
-              </Text>
-              <Switch
-                id="notifications-enable-all"
-                size="1"
-                checked={areAllNotificationsEnabled}
-                disabled={isPending || !notifications}
-                onCheckedChange={async (checked) => {
-                  setSettingsError(null);
-                  try {
-                    await toggleAllNotifications(checked);
-                  } catch (error) {
-                    Logger.error("[NotificationsSettings] Error toggling all", {
-                      error,
-                    });
-                    setSettingsError(
-                      error instanceof Error
-                        ? error.message
-                        : "Unable to update notification settings.",
-                    );
-                  }
-                }}
-              />
-            </Flex>
+          <Flex direction="column" gap="4">
+            {notificationEntries.map(([key, notification]) => {
+              const switchId = `notification-${key}`;
 
-            <Flex direction="column" gap="1">
-              {notificationEntries.map(([key, notification]) => {
-                const switchId = `notification-${key}`;
-
-                return (
-                  <Box key={key}>
-                    <Flex gap="2" justify="between" align="center">
-                      <Text as="label" size="2" htmlFor={switchId}>
+              return (
+                <Box key={key}>
+                  <Flex gap="2" justify="between" align="center">
+                    <Flex direction="column" gap="1">
+                      <Text
+                        as="label"
+                        size="2"
+                        className="settings-control-label"
+                        htmlFor={switchId}
+                      >
                         {notification.title}
                       </Text>
-                      <Switch
-                        id={switchId}
-                        size="1"
-                        checked={notification.value}
-                        onCheckedChange={async (checked) => {
-                          setSettingsError(null);
-                          try {
-                            await toggleNotification({ checked, key });
-                          } catch (error) {
-                            Logger.error(
-                              "[NotificationsSettings] Error toggling notification",
-                              { error },
-                            );
-                            setSettingsError(
-                              error instanceof Error
-                                ? error.message
-                                : "Unable to update notification settings.",
-                            );
-                          }
-                        }}
-                        disabled={isPending}
-                      />
+                      <Text size="2" className="settings-card-description">
+                        {notification.description}
+                      </Text>
                     </Flex>
-                  </Box>
-                );
-              })}
-            </Flex>
+                    <Switch
+                      id={switchId}
+                      size="1"
+                      checked={notification.value}
+                      onCheckedChange={async (checked) => {
+                        setSettingsError(null);
+                        try {
+                          await toggleNotification({ checked, key });
+                        } catch (error) {
+                          Logger.error(
+                            "[NotificationsSettings] Error toggling notification",
+                            { error },
+                          );
+                          setSettingsError(
+                            error instanceof Error
+                              ? error.message
+                              : "Unable to update notification settings.",
+                          );
+                        }
+                      }}
+                      disabled={isPending}
+                    />
+                  </Flex>
+                </Box>
+              );
+            })}
           </Flex>
         </Flex>
       </Card>
+
       {settingsError && (
         <Text role="alert" color="red" size="2">
           {settingsError}
