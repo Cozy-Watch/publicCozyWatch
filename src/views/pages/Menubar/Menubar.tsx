@@ -1,7 +1,14 @@
 import { MarkGithubIcon } from "@primer/octicons-react";
-import { Box, Button, Callout, Flex, Spinner } from "@radix-ui/themes";
-import { useState } from "react";
+import {
+  Badge,
+  Button,
+  Callout,
+  Flex,
+  Spinner,
+  Tabs,
+} from "@radix-ui/themes";
 import { useIsAuthenticatedQuery } from "../../api/useIsAuthenticatedQuery";
+import { useState } from "react";
 import { Header } from "./components/Header/Header";
 import { HeaderEmpty } from "./components/Header/Header.empty";
 import { My } from "./Tabs/My/My";
@@ -14,17 +21,16 @@ export const Menubar = () => {
   const { error, data, isPending } = useMenubar();
   const { data: isAuthenticated } = useIsAuthenticatedQuery();
   const { data: menubarDensity } = useMenubarDensityQuery();
-
   const isCompact = menubarDensity === "compact";
 
   if (isPending || isAuthenticated === false) {
     return (
-      <Flex direction="column" height="100%" flexGrow="1">
+      <Flex direction="column" height="100%" flexGrow="1" overflow="hidden">
         <Flex
           direction="column"
           justify="between"
-          flexGrow="1"
-          height={isCompact ? "90px" : "130px"}
+          flexShrink="0"
+          height={isCompact ? "90px" : "100px"}
           pt={isCompact ? "2" : "3"}
           px={isCompact ? "2" : "3"}
         >
@@ -34,7 +40,7 @@ export const Menubar = () => {
         <Flex
           direction="column"
           flexGrow="1"
-          height="100%"
+          minHeight="0"
           align="center"
           justify="center"
         >
@@ -59,12 +65,18 @@ export const Menubar = () => {
 
   if (error) {
     return (
-      <Flex direction="column" height="100%" width="100%" flexGrow="1">
+      <Flex
+        direction="column"
+        height="100%"
+        width="100%"
+        flexGrow="1"
+        overflow="hidden"
+      >
         <Flex
           direction="column"
           justify="between"
-          height="130px"
-          flexGrow="1"
+          height="100px"
+          flexShrink="0"
           pt="5"
           px="5"
         >
@@ -74,7 +86,7 @@ export const Menubar = () => {
         <Flex
           direction="column"
           flexGrow="1"
-          height="100%"
+          minHeight="0"
           width="100%"
           align="center"
           justify="center"
@@ -95,90 +107,84 @@ export const Menubar = () => {
   const { avatarUrl, name, login } = headerData;
 
   return (
-    <Flex direction="column" flexGrow="1" overflow="hidden">
-      <Flex
-        direction="column"
-        justify="between"
-        flexGrow="1"
-        height={isCompact ? "90px" : "130px"}
-        pt={isCompact ? "2" : "3"}
-        px={isCompact ? "2" : "3"}
-      >
-        <Header
-          avatarUrl={avatarUrl}
-          name={name}
-          login={login}
-          isCompact={isCompact}
-        />
+    <Tabs.Root
+      value={selectedTab}
+      onValueChange={(value) => {
+        if (value === "mine" || value === "team") setSelectedTab(value);
+      }}
+      asChild
+    >
+      <Flex direction="column" height="100%" overflow="hidden">
+        <Flex
+          direction="column"
+          justify="between"
+          flexShrink="0"
+          height={isCompact ? "90px" : "100px"}
+          pt={isCompact ? "2" : "3"}
+          px={isCompact ? "2" : "3"}
+        >
+          <Header
+            avatarUrl={avatarUrl}
+            name={name}
+            login={login}
+            isCompact={isCompact}
+          />
 
-        <Flex direction="column" gap="4">
-          <Flex justify="center" gap="1" width="100%">
-            <Box width="100%">
-              <Button
-                size={isCompact ? "1" : "2"}
-                variant={selectedTab == "mine" ? "soft" : "outline"}
-                onClick={() => {
-                  setSelectedTab("mine");
-                }}
-                className="mb-text-color-heading"
-                style={{
-                  ...(selectedTab === "mine" ? {} : { boxShadow: "none" }),
-                  width: "100%",
-
-                  fontWeight: "medium",
-                }}
-              >
-                My Pull Requests (
-                {myPullRequests.length > 99 ? "99+" : myPullRequests.length})
-              </Button>
-            </Box>
-
-            <Box width="100%">
-              <Button
-                size={isCompact ? "1" : "2"}
-                variant={selectedTab == "team" ? "soft" : "outline"}
-                className="mb-text-color-heading"
-                onClick={() => {
-                  setSelectedTab("team");
-                }}
-                style={{
-                  ...(selectedTab === "team" ? {} : { boxShadow: "none" }),
-                  width: "100%",
-
-                  fontWeight: "medium",
-                }}
-              >
-                Relevant Pull Requests (
+          <Tabs.List
+            className="menubar-classic-tabs"
+            data-density={isCompact ? "compact" : "standard"}
+            size={isCompact ? "1" : "2"}
+          >
+            <Tabs.Trigger
+              className="menubar-classic-tab"
+              value="mine"
+            >
+              My Pull Requests
+              <Badge ml="1" size="1">
+                {myPullRequests.length > 99 ? "99+" : myPullRequests.length}
+              </Badge>
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              className="menubar-classic-tab"
+              value="team"
+            >
+              Relevant Pull Requests
+              <Badge ml="1" size="1">
                 {teamPullRequests.length > 99 ? "99+" : teamPullRequests.length}
-                )
-              </Button>
-            </Box>
-          </Flex>
-
-          <Box>
-            <Flex
-              style={{
-                width: "100vw",
-                height: "1px",
-                background: "var(--gray-a3)",
-              }}
-            />
-          </Box>
+              </Badge>
+            </Tabs.Trigger>
+          </Tabs.List>
         </Flex>
-      </Flex>
 
-      <Flex
-        direction="column"
-        flexGrow="1"
-        height={isCompact ? "540px" : "500px"}
-        overflowX="auto"
-      >
-        {selectedTab === "mine" ? (
-          <My pullRequests={myPullRequests} isCompact={isCompact} />
-        ) : (
-          <Team pullRequests={teamPullRequests} isCompact={isCompact} />
-        )}
+        <Tabs.Content value="mine" asChild>
+          <Flex
+            direction="column"
+            className="menubar-classic-panel"
+            flexGrow="1"
+            minHeight="0"
+            overflowY="auto"
+            overflowX="hidden"
+          >
+            {selectedTab === "mine" ? (
+              <My pullRequests={myPullRequests} isCompact={isCompact} />
+            ) : null}
+          </Flex>
+        </Tabs.Content>
+        <Tabs.Content value="team" asChild>
+          <Flex
+            direction="column"
+            className="menubar-classic-panel"
+            flexGrow="1"
+            minHeight="0"
+            overflowY="auto"
+            overflowX="hidden"
+          >
+            {selectedTab === "team" ? (
+              <Team pullRequests={teamPullRequests} isCompact={isCompact} />
+            ) : null}
+          </Flex>
+        </Tabs.Content>
       </Flex>
-    </Flex>
+    </Tabs.Root>
   );
 };

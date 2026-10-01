@@ -28,13 +28,7 @@ export const List = ({
 
   return (
     <Flex key={owner} width="100%" direction="column">
-      <Card
-        className="accent-shadow-low"
-        style={{
-          background:
-            "linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-1))",
-        }}
-      >
+      <Card className="settings-card">
         <Flex width="100%" direction="column" gap="2">
           <Flex align="center" gap="4" px="4" pt="4">
             <Box>
@@ -58,7 +52,7 @@ export const List = ({
 
             <Avatar size="1" src={repos[0].avatar} fallback={owner} />
 
-            <Text weight="bold">
+            <Text className="settings-control-label">
               {owner} ({repos.length})
             </Text>
           </Flex>
@@ -88,7 +82,7 @@ export const List = ({
                       }}
                     />
                     <Flex align="center" gap="3">
-                      <Text>{repo.name}</Text>
+                      <Text className="settings-repository-name">{repo.name}</Text>
                     </Flex>
                   </Flex>
                 );

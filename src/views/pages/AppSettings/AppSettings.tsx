@@ -1,78 +1,67 @@
-import { ChatBubbleIcon } from "@radix-ui/react-icons";
-import {
-  Box,
-  Button,
-  Card,
-  DropdownMenu,
-  Flex,
-  Grid,
-  Switch,
-  Text,
-} from "@radix-ui/themes";
+import { Badge, Button, Card, DropdownMenu, Flex, Grid, Switch, Text } from "@radix-ui/themes";
 import Logger from "electron-log";
-import { useNavigate, useRouter } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Appearance } from "../../../state/appState";
-import { LicenseModal } from "../../components/LicenseModal/LicenseModal";
-import { LicenseStatusCard } from "../../components/LicenseStatus/LicenseStatusCard";
 import {
-  licenseStatusQueryKey,
-  useLicenseStatusQuery,
-} from "../../api/useLicenseStatusQuery";
-
+  ACCENT_COLORS,
+  DEFAULT_ACCENT_COLOR,
+  isAccentColor,
+} from "../../../shared/theme";
+import { useAccentColorMutation } from "./api/useAccentColorMutation";
+import { useAccentColorQuery } from "./api/useAccentColorQuery";
 import { useAppearanceMutation } from "./api/useAppearanceMutation";
 import { useAppearanceQuery } from "./api/useAppearanceQuery";
-import { useNotificationsMutation } from "./api/useNotificationsMutation";
-import { useNotificationQuery } from "./api/useNotificationsQuery";
 import { useOpenAtLoginMutation } from "./api/useOpenAtLoginMutation";
 import { useOpenAtLoginQuery } from "./api/useOpenAtLoginQuery";
-import { useToggleAllNotificationsMutation } from "./api/useToggleAllNotificationsMutation";
-import { useMenubarDensityQuery } from "./api/useMenubarDensityQuery";
-import { useMenubarDensityMutation } from "./api/useMenubarDensityMutation";
-import {
-  LinkExternalIcon,
-  MarkGithubIcon,
-  SignOutIcon,
-} from "@primer/octicons-react";
+import { SettingsSection } from "../Settings/SettingsSection";
 
 export const AppSettings = () => {
-  const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
-  const [licenseActionError, setLicenseActionError] = useState<string | null>(
-    null,
-  );
-  const [isLicenseActionPending, setIsLicenseActionPending] = useState(false);
   const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false);
   const [diagnosticsStatusError, setDiagnosticsStatusError] = useState<
     string | null
   >(null);
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
   const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
-  const { data: licenseState, isPending: isLicenseStatusPending } =
-    useLicenseStatusQuery();
-  const { isPending, data: notifications } = useNotificationQuery();
-  const { mutateAsync: toggleNotification } = useNotificationsMutation();
+  const { data: hasOpenAtLogin, isPending: isOpenAtLoginLoading } = useOpenAtLoginQuery();
+  const {
+    mutateAsync: saveIsOpenAtLogin,
+    isPending: isSavingOpenAtLogin,
+  } = useOpenAtLoginMutation();
+  const { data: appearance, isPending: isAppearanceLoading } = useAppearanceQuery();
+  const {
+    mutateAsync: saveAppearance,
+    isPending: isSavingAppearance,
+  } = useAppearanceMutation();
+  const { data: storedAccentColor } = useAccentColorQuery();
+  const { mutateAsync: saveAccentColor } = useAccentColorMutation();
+  const accentColor = storedAccentColor ?? DEFAULT_ACCENT_COLOR;
+  const appearanceValue = appearance ?? "system";
 
-  const { data: hasOpenAtLogin } = useOpenAtLoginQuery();
-  const { mutateAsync: saveIsOpenAtLogin } = useOpenAtLoginMutation();
-  const { mutateAsync: toggleAllNotifications } =
-    useToggleAllNotificationsMutation();
+  const updateOpenAtLogin = async (checked: boolean) => {
+    setSettingsError(null);
+    try {
+      await saveIsOpenAtLogin(checked);
+    } catch (error) {
+      Logger.error("[AppSettings] Error toggling Open At login", { error });
+      setSettingsError(
+        error instanceof Error ? error.message : "Unable to update Open at login.",
+      );
+    }
+  };
 
-  const { data: appearance } = useAppearanceQuery();
-  const { mutateAsync: saveAppearance } = useAppearanceMutation();
-
-  const areAllNotificationsEnabled = Object.values(notifications || {}).every(
-    ({ value }) => value === true,
-  );
-
-  const { data: menubarDensity } = useMenubarDensityQuery();
-  const { mutateAsync: setMenubarDensity } = useMenubarDensityMutation();
-  const isMenubarCompact = menubarDensity === "compact";
-
-  const router = useRouter();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const updateAppearance = async (nextAppearance: Appearance | null) => {
+    setSettingsError(null);
+    try {
+      await saveAppearance(nextAppearance);
+    } catch (error) {
+      Logger.error("[AppSettings] Error updating appearance", { error });
+      setSettingsError(
+        error instanceof Error ? error.message : "Unable to update appearance.",
+      );
+    }
+  };
 
   useEffect(() => {
     void window.electronAPI.application
@@ -82,7 +71,9 @@ export const AppSettings = () => {
         setDiagnosticsStatusError(null);
       })
       .catch((error) => {
-        Logger.error("[AppSettings] Failed to load diagnostics status", { error });
+        Logger.error("[AppSettings] Failed to load diagnostics status", {
+          error,
+        });
         setDiagnosticsStatusError(
           error instanceof Error
             ? error.message
@@ -90,35 +81,6 @@ export const AppSettings = () => {
         );
       });
   }, []);
-
-  const runLicenseAction = async (action: () => Promise<unknown>) => {
-    setLicenseActionError(null);
-    setIsLicenseActionPending(true);
-
-    try {
-      await action();
-      await queryClient.invalidateQueries({ queryKey: licenseStatusQueryKey });
-    } catch (error) {
-      setLicenseActionError(
-        error instanceof Error
-          ? error.message
-          : "Unable to update license status. Please try again.",
-      );
-    } finally {
-      setIsLicenseActionPending(false);
-    }
-  };
-
-  const onSignOut = async () => {
-    try {
-      await window.electronAPI.application.signUser(false);
-      await queryClient.invalidateQueries();
-      await router.invalidate();
-      navigate({ to: "/" });
-    } catch (error) {
-      Logger.error("[AppSettings] Error signing out", { error });
-    }
-  };
 
   const exportDiagnostics = async () => {
     setDiagnosticsError(null);
@@ -138,329 +100,172 @@ export const AppSettings = () => {
   };
 
   return (
-    <Flex
-      direction="column"
-      overflow="auto"
-      height="100%"
-      position="relative"
-      pb="9"
-    >
-      <Flex width="100%" direction="column" gap="4" p="4" flexGrow="1">
-        <LicenseStatusCard
-          state={licenseState}
-          isPending={isLicenseStatusPending || isLicenseActionPending}
-          error={licenseActionError}
-          onChoosePersonalUse={() =>
-            runLicenseAction(() =>
-              window.electronAPI.license.setUsage("personal"),
-            )
-          }
-          onStartCommercialTrial={() =>
-            runLicenseAction(() =>
-              window.electronAPI.license.setUsage("commercial"),
-            )
-          }
-          onOpenLicenseModal={() => setIsLicenseModalOpen(true)}
-          onDeactivate={() => {
-            if (
-              window.confirm(
-                "Deactivate this Mac? You can then activate the license on another device.",
-              )
-            ) {
-              return runLicenseAction(() =>
-                window.electronAPI.license.deactivate(),
-              );
-            }
-          }}
-        />
-
-        <Card
-          className="accent-shadow-low"
-          style={{
-            background:
-              "linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-1))",
-          }}
-        >
-          <Flex justify={"between"} align={"center"}>
-            <Text weight="medium">Menu Bar compact view:</Text>
-            <Flex gap="2" justify={"between"} align={"center"}>
-              <Switch
-                size="1"
-                checked={isMenubarCompact}
-                onCheckedChange={async (checked) => {
-                  try {
-                    await setMenubarDensity(checked ? "compact" : "default");
-                  } catch (error) {
-                    Logger.error(
-                      "[AppSettings] Error toggling MenuBar Density",
-                      {
-                        error,
-                      },
-                    );
-                  }
-                }}
-              />
-            </Flex>
+    <SettingsSection>
+      <Grid columns="1fr" gap="4">
+        <Card className="settings-card">
+          <Flex justify="between" align="center">
+            <Text className="settings-control-label">Open at login:</Text>
+            <Switch
+              size="1"
+              aria-label="Open at login"
+              checked={hasOpenAtLogin ?? false}
+              disabled={isOpenAtLoginLoading || isSavingOpenAtLogin}
+              onCheckedChange={(checked) => void updateOpenAtLogin(checked)}
+            />
           </Flex>
         </Card>
 
-        <Grid columns="1fr 1fr" gap="4">
-          <Card>
-            <Flex justify={"between"} align={"center"}>
-              <Text weight="medium">Open at login:</Text>
-              <Flex gap="2" justify={"between"} align={"center"}>
-                <Switch
-                  size="1"
-                  checked={hasOpenAtLogin}
-                  onCheckedChange={async (checked) => {
-                    try {
-                      await saveIsOpenAtLogin(checked);
-                    } catch (error) {
-                      Logger.error(
-                        "[AppSettings] Error toggling Open At login",
-                        {
-                          error,
-                        },
-                      );
-                    }
-                  }}
-                />
-              </Flex>
-            </Flex>
-          </Card>
-
-          <Card>
+        <Card className="settings-card">
+          <Flex direction="column" gap="3">
             <Flex align="center" justify="between">
-              <Text weight="medium">Appearance:</Text>
+              <Text className="settings-control-label">Appearance:</Text>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
+                  <Button
+                    variant="surface"
+                    style={{ width: 180 }}
+                    disabled={isAppearanceLoading || isSavingAppearance}
+                  >
+                    {appearance === Appearance.Light
+                      ? "Light"
+                      : appearance === Appearance.Dark
+                        ? "Dark"
+                        : "System"}
+                    <DropdownMenu.TriggerIcon />
+                  </Button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content>
+                  <DropdownMenu.RadioGroup
+                    value={appearanceValue}
+                    onValueChange={(value) => {
+                      if (value === "system") {
+                        void updateAppearance(null);
+                        return;
+                      }
 
-              <Flex direction="column">
-                <DropdownMenu.Root>
-                  <DropdownMenu.Trigger>
-                    <Button variant="surface" style={{ width: 180 }}>
-                      {appearance === Appearance.Light
-                        ? "Light"
-                        : appearance === Appearance.Dark
-                          ? "Dark"
-                          : "System"}
-                      <DropdownMenu.TriggerIcon />
-                    </Button>
-                  </DropdownMenu.Trigger>
-                  <DropdownMenu.Content>
-                    <DropdownMenu.Item
-                      onClick={() => {
-                        saveAppearance(Appearance.Light);
-                      }}
-                    >
-                      Light
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Item
-                      onClick={() => {
-                        saveAppearance(Appearance.Dark);
-                      }}
-                    >
-                      Dark
-                    </DropdownMenu.Item>
-
-                    <DropdownMenu.Item
-                      onClick={() => {
-                        saveAppearance(null);
-                      }}
-                    >
-                      System
-                    </DropdownMenu.Item>
-                  </DropdownMenu.Content>
-                </DropdownMenu.Root>
-              </Flex>
-            </Flex>
-          </Card>
-        </Grid>
-
-        {(diagnosticsEnabled || diagnosticsStatusError) && (
-          <Card className="accent-shadow-low">
-            <Flex align="center" justify="between" gap="3">
-              <Flex direction="column" gap="1">
-                <Text weight="medium">Performance diagnostics</Text>
-                <Text size="2" color="gray">
-                  Export redacted startup, responsiveness, and resource metrics
-                  for support.
-                </Text>
-                {diagnosticsStatusError && (
-                  <Text size="2" color="red">
-                    {diagnosticsStatusError}
-                  </Text>
-                )}
-                {diagnosticsError && (
-                  <Text size="2" color="red">
-                    {diagnosticsError}
-                  </Text>
-                )}
-              </Flex>
-              <Button
-                variant="outline"
-                onClick={() => void exportDiagnostics()}
-                disabled={isExportingDiagnostics}
-              >
-                {isExportingDiagnostics ? "Exporting..." : "Export diagnostics"}
-              </Button>
-            </Flex>
-          </Card>
-        )}
-
-        <Card
-          className="accent-shadow-low"
-          style={{
-            background:
-              "linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-1))",
-          }}
-        >
-          <Flex direction="column" justify="between">
-            <Flex>
-              <Flex direction="column" gap="2">
-                <Text weight="medium">Notifications:</Text>
-
-                <Text size="2" weight="light">
-                  What notifications do you want to receive?
-                </Text>
-              </Flex>
-            </Flex>
-
-            <Flex justify={"end"}>
-              <Flex direction="column" gap="2" justify={"between"}>
-                <Flex gap="2" justify={"between"}>
-                  <Text size="2">Enable All:</Text>
-                  <Switch
-                    size="1"
-                    checked={areAllNotificationsEnabled}
-                    onCheckedChange={async (checked) => {
-                      try {
-                        await toggleAllNotifications(checked);
-                      } catch (error) {
-                        Logger.error(
-                          "[AppSettings] Error toggling notification",
-                          { error },
-                        );
+                      if (value === Appearance.Light || value === Appearance.Dark) {
+                        void updateAppearance(value);
                       }
                     }}
-                  />
-                </Flex>
+                  >
+                    <DropdownMenu.RadioItem
+                      value={Appearance.Light}
+                      disabled={isSavingAppearance}
+                    >
+                      Light
+                    </DropdownMenu.RadioItem>
+                    <DropdownMenu.RadioItem
+                      value={Appearance.Dark}
+                      disabled={isSavingAppearance}
+                    >
+                      Dark
+                    </DropdownMenu.RadioItem>
+                    <DropdownMenu.RadioItem
+                      value="system"
+                      disabled={isSavingAppearance}
+                    >
+                      System
+                    </DropdownMenu.RadioItem>
+                  </DropdownMenu.RadioGroup>
+                </DropdownMenu.Content>
+              </DropdownMenu.Root>
+            </Flex>
+            <Flex align="center" justify="between">
+              <Text className="settings-control-label">Accent color:</Text>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
+                  <Button variant="surface" style={{ width: 180 }}>
+                    <Badge
+                      aria-hidden
+                      color={accentColor}
+                      radius="full"
+                      variant="solid"
+                      style={{ height: 12, minWidth: 12, padding: 0 }}
+                    />
+                    {accentColor.charAt(0).toUpperCase() + accentColor.slice(1)}
+                    <DropdownMenu.TriggerIcon />
+                  </Button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content align="end">
+                  <DropdownMenu.RadioGroup
+                    value={accentColor}
+                    onValueChange={(value) => {
+                      if (!isAccentColor(value) || value === accentColor) return;
 
-                <Flex direction="column" gap="1" justify={"between"}>
-                  {Object.entries(notifications || {}).map(
-                    ([key, notification]) => {
-                      return (
-                        <Box key={key}>
-                          <Text as="label" size="2">
-                            <Flex gap="2" justify={"between"}>
-                              <Text>{notification.title}</Text>
-
-                              <Box>
-                                <Switch
-                                  size="1"
-                                  checked={notification.value}
-                                  onCheckedChange={async (checked) => {
-                                    try {
-                                      await toggleNotification({
-                                        checked,
-                                        key,
-                                      });
-                                    } catch (error) {
-                                      Logger.error(
-                                        "[AppSettings] Error toggling notification",
-                                        { error },
-                                      );
-                                    }
-                                  }}
-                                  disabled={isPending}
-                                />
-                              </Box>
-                            </Flex>
-                          </Text>
-                        </Box>
-                      );
-                    },
-                  )}
-                </Flex>
-              </Flex>
+                      void saveAccentColor(value).catch((error) => {
+                        Logger.error("[AppSettings] Error updating accent color", {
+                          error,
+                        });
+                        setSettingsError(
+                          error instanceof Error
+                            ? error.message
+                            : "Unable to update accent color.",
+                        );
+                      });
+                    }}
+                  >
+                    <Grid columns="1fr 1fr" gap="1" p="1">
+                      {ACCENT_COLORS.map((color) => (
+                        <DropdownMenu.RadioItem key={color} value={color}>
+                          <Flex align="center" gap="2">
+                            <Badge
+                              aria-hidden
+                              color={color}
+                              radius="full"
+                              variant="solid"
+                              style={{ height: 12, minWidth: 12, padding: 0 }}
+                            />
+                            {color.charAt(0).toUpperCase() + color.slice(1)}
+                          </Flex>
+                        </DropdownMenu.RadioItem>
+                      ))}
+                    </Grid>
+                  </DropdownMenu.RadioGroup>
+                </DropdownMenu.Content>
+              </DropdownMenu.Root>
             </Flex>
           </Flex>
         </Card>
+      </Grid>
 
-        <Grid columns="1fr 1fr" gap="4">
-          <Card
-            className="accent-shadow-low"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-1))",
-            }}
-          >
-            <Flex align="center" justify="between">
-              <Text weight="medium">Feedback:</Text>
+      {settingsError && (
+        <Text role="alert" color="red" size="2">
+          {settingsError}
+        </Text>
+      )}
 
-              <Button
-                variant="outline"
-                style={{ width: 180 }}
-                onClick={() => {
-                  window.electronAPI.openExternalLink(
-                    "mailto:tiago@cozywatch.com",
-                  );
-                }}
-              >
-                Let's chat
-                <ChatBubbleIcon />
-              </Button>
+      {(diagnosticsEnabled || diagnosticsStatusError) && (
+        <Card className="settings-card">
+          <Flex align="center" justify="between" gap="3">
+            <Flex direction="column" gap="1">
+              <Text className="settings-card-title">Performance diagnostics</Text>
+              <Text size="2" className="settings-card-description">
+                Export redacted startup, responsiveness, and resource metrics
+                for support.
+              </Text>
+              {diagnosticsStatusError && (
+                <Text size="2" color="red">
+                  {diagnosticsStatusError}
+                </Text>
+              )}
+              {diagnosticsError && (
+                <Text size="2" color="red">
+                  {diagnosticsError}
+                </Text>
+              )}
             </Flex>
-          </Card>
-
-          <Card
-            className="accent-shadow-low"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-1))",
-            }}
-          >
-            <Flex align="center" justify="between">
-              <Text weight="medium">See what's new:</Text>
-
-              <Button
-                onClick={() => {
-                  window.electronAPI.openExternalLink(
-                    "https://www.cozywatch.com/changelog/",
-                  );
-                }}
-                variant="outline"
-              >
-                Open Release Notes
-                <LinkExternalIcon size={12} />
-              </Button>
-            </Flex>
-          </Card>
-        </Grid>
-
-        <Card
-          className="accent-shadow-low"
-          style={{
-            background:
-              "linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-1))",
-          }}
-        >
-          <Flex align="center" justify="between">
-            <Flex align="center" gap="2">
-              <MarkGithubIcon size={16} />
-              <Text weight="medium">GitHub</Text>
-            </Flex>
-            <Flex align="center" gap="3">
-              <Button variant="soft" color="red" size="1" onClick={onSignOut}>
-                <SignOutIcon size={12} />
-                Disconnect
-              </Button>
-            </Flex>
+            <Button
+              className="settings-action"
+              variant="outline"
+              style={{ width: 180 }}
+              onClick={() => void exportDiagnostics()}
+              disabled={isExportingDiagnostics}
+            >
+              {isExportingDiagnostics ? "Exporting..." : "Export diagnostics"}
+            </Button>
           </Flex>
         </Card>
-        <LicenseModal
-          isOpen={isLicenseModalOpen}
-          onClose={() => setIsLicenseModalOpen(false)}
-        />
-      </Flex>
-    </Flex>
+      )}
+    </SettingsSection>
   );
 };

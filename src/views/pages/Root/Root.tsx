@@ -1,7 +1,7 @@
 import { Box, Flex } from "@radix-ui/themes";
 import { Outlet, useMatchRoute } from "@tanstack/react-router";
 import { Header } from "../Header/Header";
-import { Sidebar } from "./components/Sidebar/Sidebar";
+import { ApplicationNavigation } from "./components/ApplicationNavigation/ApplicationNavigation";
 
 const titlebarSize = "30px";
 
@@ -10,6 +10,7 @@ export const Root = () => {
 
   const isAuthenticationRoute = !!matchRoute({ to: "/" });
   const isMenubar = !!matchRoute({ to: "/menubar" });
+  const isSettings = !!matchRoute({ to: "/settings" });
 
   const isAuthenticated = !isAuthenticationRoute;
 
@@ -32,62 +33,49 @@ export const Root = () => {
         background: "var(--accent-a1)",
       }}
     >
-      <Flex direction="column" height="100vh" overflowY="auto">
-        {!isAuthenticated && (
+      {!isAuthenticated && (
+        <Box
+          id="toolbar"
+          flexShrink="0"
+          // toolbar needed for drag the app
+          style={{
+            height: titlebarSize,
+            background: "var(--accent-a12)",
+            marginBottom: `-${titlebarSize}`,
+          }}
+        />
+      )}
+
+      {isAuthenticated && (
+        <Box position="relative" flexShrink="0" style={{ zIndex: 1 }}>
           <Box
             id="toolbar"
             // toolbar needed for drag the app
-            style={{
-              height: `${titlebarSize}`,
-              background: "var(--accent-a12)",
-              marginBottom: `-${titlebarSize}`,
-            }}
+            style={{ height: titlebarSize }}
           />
-        )}
 
-        {isAuthenticated && (
-          <Box position="sticky" style={{ top: 0, zIndex: 1 }}>
-            <Box
-              style={{
-                width: "100%",
-                position: "absolute",
-                top: 0,
-                inset: 0,
-                height: "100%",
-                backdropFilter: "blur(5px)",
-                maskImage: `linear-gradient(to bottom,black 0% 100%,red 0% 100%)`,
-              }}
-            />
+          <Header />
+          {!isSettings && <ApplicationNavigation />}
+        </Box>
+      )}
 
-            <Box
-              id="toolbar"
-              // toolbar needed for drag the app
-              style={{
-                height: `${titlebarSize}`,
-              }}
-            />
-
-            <Header />
-          </Box>
-        )}
-
-        <Flex height="100%" width="100%" overflow="hidden">
-          <Sidebar />
-          <Flex
-            position="relative"
-            direction="column"
-            flexGrow="1"
-            style={{
-              borderRadius: "8px",
-              background:
-                "linear-gradient(135deg, var(--accent-a2) 0%,  var(--accent-a1) 50%, var(--accent-a1) 90%)",
-            }}
-            overflow="auto"
-            width="100%"
-          >
-            <Outlet />
-          </Flex>
-        </Flex>
+      <Flex
+        position="relative"
+        direction="column"
+        flexGrow="1"
+        minHeight="0"
+        style={{
+          ...(!isAuthenticated
+            ? {
+                borderRadius: "8px",
+                background:
+                  "linear-gradient(135deg, var(--accent-a2) 0%,  var(--accent-a1) 50%, var(--accent-a1) 90%)",
+              }
+            : {}),
+        }}
+        overflow="hidden"
+      >
+        <Outlet />
       </Flex>
     </Flex>
   );

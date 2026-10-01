@@ -1,10 +1,11 @@
 import { createOAuthDeviceAuth } from "@octokit/auth-oauth-device";
-import { ipcMain, Notification } from "electron";
+import { ipcMain } from "electron";
 import Logger from "electron-log";
 import { CLIENT_ID, GITHUB_APP_CLIENT_ID } from "../../keys";
 import { getData, storeData } from "../../safeStorage/safeStorage";
 import { Octokit } from "@octokit/rest";
 import { tryOpenExternalUrl } from "../../security/externalUrl";
+import { batchNotificationManager } from "../../notifications/notificationManager";
 
 export const authenticateWithGitHub = async (): Promise<boolean> => {
   try {
@@ -20,10 +21,11 @@ export const authenticateWithGitHub = async (): Promise<boolean> => {
 
         tryOpenExternalUrl(verification_uri);
 
-        new Notification({
+        batchNotificationManager([{
           title: "GitHub Authentication",
           body: `Your auth code is: ${user_code}. Enter it at the opened URL.`,
-        }).show();
+          type: "system",
+        }]);
       },
     });
 
@@ -97,10 +99,11 @@ export const authenticateWithGitHubApp = async (): Promise<boolean> => {
 
         tryOpenExternalUrl(verification_uri);
 
-        new Notification({
+        batchNotificationManager([{
           title: "GitHub Authentication",
           body: `Your auth code is: ${user_code}. Enter it at the opened URL.`,
-        }).show();
+          type: "system",
+        }]);
       },
     });
 

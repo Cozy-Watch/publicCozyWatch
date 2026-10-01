@@ -39,6 +39,9 @@ jobs:
       - name: Run tests
         run: npm test -- --runInBand
 
+      - name: Exercise production refresh with mocked GitHub HTTP
+        run: npm run test:refresh
+
       - name: Verify contributor package
         run: npm run package
 

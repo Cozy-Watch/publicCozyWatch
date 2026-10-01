@@ -1,64 +1,124 @@
-import { Notification } from "electron";
+import { Notification, app, ipcMain } from "electron";
 import Logger from "electron-log";
+import { getData, storeData } from "../safeStorage/safeStorage";
+import type {
+  NotificationRecord,
+  NotificationTone,
+  NotificationType,
+} from "../safeStorage/safeStorage.types";
 
-interface ManagedNotification {
+export interface ManagedNotification {
   title: string;
   body: string;
-  onClick?: () => void;
+  type?: NotificationType;
+  tone?: NotificationTone;
+  url?: string;
+  source?: NotificationRecord["source"];
 }
 
-// Using content hash instead of ID for deduplication
+export const formatNotificationSource = (source?: NotificationRecord["source"]) =>
+  [source?.repository, source?.pullNumber ? `#${source.pullNumber}` : undefined, source?.branch]
+    .filter(Boolean)
+    .join(" · ");
+
 const recentNotifications = new Set<string>();
 const notificationQueue: ManagedNotification[] = [];
 let isProcessingQueue = false;
-const NOTIFICATION_DELAY = 3000; // milliseconds between notifications
-const DEDUPLICATION_WINDOW = 60000; // Clear notification history after 1 minute
+let notificationSequence = 0;
+const NOTIFICATION_DELAY = 3000;
+const DEDUPLICATION_WINDOW = 60000;
+const MAX_HISTORY = 100;
 
-let activeNotifications: Notification[] = []; // Store to prevent GC
+let activeNotifications: Notification[] = [];
+let historyMutation: Promise<void> = Promise.resolve();
 
-// Get a unique hash for a notification based on content
 function getNotificationHash(notification: ManagedNotification): string {
   const title = (notification.title || "").trim().toLowerCase();
   const body = (notification.body || "").trim().toLowerCase();
-
-  Logger.info("Generating hash for notification:", `${title}::${body}`);
-
   return `${title}::${body}`;
 }
 
-// Batch notification function
-export const batchNotificationManager = (
-  notifications: ManagedNotification[]
+const emitHistoryUpdate = (history: NotificationRecord[]) => {
+  ipcMain.emit("dispatch-notification-update", null, history);
+};
+
+const readHistory = async (): Promise<NotificationRecord[]> =>
+  (await getData("notification_history")) ?? [];
+
+const updateHistory = async (
+  update: (history: NotificationRecord[]) => NotificationRecord[],
 ) => {
-  // Clear the existing queue
+  historyMutation = historyMutation
+    .catch(() => undefined)
+    .then(async () => {
+      const history = update(await readHistory());
+      await storeData({ name: "notification_history", data: history });
+      emitHistoryUpdate(history);
+    });
+  await historyMutation;
+};
+
+export const getNotificationHistory = readHistory;
+
+export const markNotificationRead = async (id: string, read = true) => {
+  await updateHistory((history) =>
+    history.map((notification) =>
+      notification.id === id ? { ...notification, read } : notification,
+    ),
+  );
+};
+
+export const markAllNotificationsRead = async () => {
+  await updateHistory((history) =>
+    history.map((notification) => ({ ...notification, read: true })),
+  );
+};
+
+export const clearNotificationHistory = async () => {
+  await updateHistory(() => []);
+};
+
+const createRecord = (notification: ManagedNotification): NotificationRecord => ({
+  id: `${Date.now()}-${notificationSequence++}`,
+  type: notification.type ?? "system",
+  ...(notification.tone ? { tone: notification.tone } : {}),
+  title: notification.title,
+  body: notification.body,
+  createdAt: new Date().toISOString(),
+  ...(notification.url ? { url: notification.url } : {}),
+  ...(notification.source ? { source: notification.source } : {}),
+  read: false,
+});
+
+const persistNotification = async (notification: ManagedNotification) => {
+  const record = createRecord(notification);
+  await updateHistory((history) => [record, ...history].slice(0, MAX_HISTORY));
+  return record;
+};
+
+export const batchNotificationManager = (notifications: ManagedNotification[]) => {
   notificationQueue.length = 0;
 
-  // Add unique notifications to queue
   notifications.forEach((notification) => {
     const hash = getNotificationHash(notification);
-
     if (!recentNotifications.has(hash)) {
       recentNotifications.add(hash);
       notificationQueue.push(notification);
     }
   });
 
-  // Start processing if not already doing so
   if (!isProcessingQueue) {
-    processQueue();
+    void processQueue();
   }
 };
 
-// Periodically clear notification history to prevent memory buildup
-setInterval(() => {
-  recentNotifications.clear();
-}, DEDUPLICATION_WINDOW);
+setInterval(() => recentNotifications.clear(), DEDUPLICATION_WINDOW);
 
 function clearNotification(notification: Notification) {
-  activeNotifications = activeNotifications.filter((n) => n !== notification);
+  activeNotifications = activeNotifications.filter((item) => item !== notification);
 }
 
-function processQueue() {
+async function processQueue() {
   if (notificationQueue.length === 0) {
     isProcessingQueue = false;
     return;
@@ -68,21 +128,30 @@ function processQueue() {
   const notification = notificationQueue.shift();
 
   if (notification) {
-    const { title, body, onClick = () => {} } = notification;
-
-    const electronNotification = new Notification({ title, body });
-    activeNotifications.push(electronNotification); // Prevent GC
+    const record = await persistNotification(notification);
+    const electronNotification = new Notification({
+      title: notification.title,
+      body: [formatNotificationSource(notification.source), notification.body]
+        .filter(Boolean)
+        .join("\n"),
+    });
+    activeNotifications.push(electronNotification);
 
     electronNotification.on("click", () => {
-      onClick();
-      clearNotification(electronNotification); // Clean up after click
+      void markNotificationRead(record.id);
+      ipcMain.emit("dispatch-notification-click", null, record.id);
+      clearNotification(electronNotification);
     });
-    electronNotification.on("close", () => {
-      clearNotification(electronNotification); // Clean up on close
-    });
+    electronNotification.on("close", () => clearNotification(electronNotification));
     electronNotification.show();
   }
 
-  // Schedule the next notification
-  setTimeout(processQueue, NOTIFICATION_DELAY);
+  setTimeout(() => void processQueue(), NOTIFICATION_DELAY);
 }
+
+export const clearNotificationsOnSignOut = async () => {
+  await clearNotificationHistory();
+  if (app.isReady()) {
+    Logger.info("[Notifications] history cleared on sign out");
+  }
+};

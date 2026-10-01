@@ -1,14 +1,16 @@
 import { ChevronDownIcon } from "@primer/octicons-react";
 import { Box, Flex, Text } from "@radix-ui/themes";
-import { AnimatePresence, motion } from "framer-motion";
-import { useMemo, useRef, useState } from "react";
-import { renderSafeMarkdown } from "../../../../utils/renderSafeMarkdown";
+import { useId, useMemo, useState } from "react";
+import { ActivityContent } from "../../../ActivityContent/ActivityContent";
+import { GitHubLink } from "../../../ActivityContent/GitHubLink";
 import { getHumanState } from "../../Review.utils";
 import { State } from "../../Reviews.meta";
 import { ReviewAvatar } from "../ReviewAvatar/ReviewAvatar";
 import { LastUpdate } from "../../../PullRequestsCard/components/LastUpdate/LastUpdate";
 
 interface Props {
+  inline?: boolean;
+  pullRequestUrl: string;
   reviewsGroupedbyUser?: Record<
     string,
     {
@@ -17,148 +19,96 @@ interface Props {
       userName: string;
       body: string;
       date: string;
+      html_url?: string;
     }
   >;
 }
 
-export const LastActivity = ({ reviewsGroupedbyUser }: Props) => {
+export const LastActivity = ({
+  reviewsGroupedbyUser,
+  pullRequestUrl,
+  inline = false,
+}: Props) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const sectionRef = useRef<HTMLDivElement>(null);
-
+  const contentId = useId();
   const feedback = useMemo(
     () =>
       Object.values(reviewsGroupedbyUser || {}).filter(
-        (reviews) => reviews.state !== "NO_FEEDBACK"
+        (review) => review.state !== "NO_FEEDBACK",
       ),
-    [reviewsGroupedbyUser]
+    [reviewsGroupedbyUser],
   );
-
-  const parsedBodies = useMemo(
-    () => feedback.map((review) => renderSafeMarkdown(review.body)),
-    [feedback],
-  );
-
-  if (feedback.length === 0) {
-    return null;
-  }
+  if (feedback.length === 0) return null;
 
   return (
-    <Flex
-      style={{ borderRadius: 10, background: "var(--gray-a2)" }}
-      direction="column"
-      p="3"
-      gap="2"
-    >
-      <motion.header
-        initial={false}
-        onClick={() => {
-          setIsExpanded((state) => !state);
-        }}
-      >
-        <Flex align="center" gap="2">
-          <Text
-            size="1"
-            className="inverse-accent-text-shadow"
+    <Flex className="activity-panel" direction="column" p="3" gap="2">
+      {inline ? (
+        <Text size="1" weight="medium" color="gray">Latest activity</Text>
+      ) : (
+        <button
+          type="button"
+          className="activity-toggle"
+          aria-expanded={isExpanded}
+          aria-controls={contentId}
+          onClick={() => setIsExpanded((state) => !state)}
+        >
+          Latest Activity
+          <span
             style={{
-              color: "var(--gray-a11)",
-              cursor: "default",
+              display: "inline-flex",
+              transform: isExpanded ? "rotate(180deg)" : undefined,
             }}
-          >
-            Latest Activity
-          </Text>
-          <motion.div
-            animate={{ rotate: isExpanded ? -180 : 0 }}
-            transition={{ duration: 0.3 }}
           >
             <ChevronDownIcon size={16} />
-          </motion.div>
-        </Flex>
-      </motion.header>
-
-      <AnimatePresence initial={false}>
-        {isExpanded && (
-          <motion.section
-            ref={sectionRef}
-            key="content"
-            initial="collapsed"
-            animate="open"
-            exit="collapsed"
-            variants={{
-              open: { opacity: 1, height: "auto" },
-              collapsed: { opacity: 0, height: 0 },
-            }}
-            transition={{ duration: 0.8, ease: [0.04, 0.62, 0.23, 0.98] }}
-            style={{ overflow: "hidden" }}
-          >
-            <Flex py="2" align="center" gap="3" direction="column">
-              {feedback.map((reviews, index) => {
-                const humanState = getHumanState(reviews.state as State);
-
-                return (
-                  <Flex key={index} width="100%" gap="2">
-                    <Box>
-                      <ReviewAvatar
-                        state={reviews.state}
-                        userAvatar={reviews.userAvatar}
-                        userName={reviews.userName}
-                      />
-                    </Box>
-
-                    <Flex direction="column" width="100%">
-                      <Flex align="center" gap="2">
-                        <Text
-                          size="1"
-                          className="inverse-accent-text-shadow"
-                          style={{
-                            color: "var(--gray-a12)",
-                            cursor: "default",
-                          }}
-                        >
-                          {reviews.userName}
-                        </Text>
-                        <Flex
-                          align="center"
-                          justify="between"
-                          gap="2"
-                          width="100%"
-                        >
-                          <Text
-                            size="1"
-                            className="inverse-accent-text-shadow"
-                            style={{
-                              color: "var(--gray-a10)",
-                              cursor: "default",
-                            }}
-                          >
-                            {humanState}
-                          </Text>
-
-                          <LastUpdate updatedAt={reviews.date} />
-                        </Flex>
-                      </Flex>
-
-                      {reviews.body && (
-                        <Text
-                          ml="2"
-                          size="1"
-                          className="inverse-accent-text-shadow"
-                          style={{
-                            color: "var(--gray-a12)",
-                            cursor: "default",
-                          }}
-                          dangerouslySetInnerHTML={{
-                            __html: parsedBodies[index],
-                          }}
-                        />
-                      )}
-                    </Flex>
+          </span>
+        </button>
+      )}
+      <div id={contentId} hidden={!inline && !isExpanded}>
+        {(inline || isExpanded) && (
+          <Flex py="2" gap="4" direction="column">
+            {feedback.map((review) => (
+              <Flex
+                key={review.userName}
+                width="100%"
+                gap="3"
+                className="activity-entry"
+              >
+                <Box>
+                  <ReviewAvatar
+                    state={review.state}
+                    userAvatar={review.userAvatar}
+                    userName={review.userName}
+                  />
+                </Box>
+                <Flex
+                  direction="column"
+                  gap="2"
+                  style={{ minWidth: 0, flex: 1 }}
+                >
+                  <Flex align="center" gap="2" wrap="wrap">
+                    <Text size="2" weight="medium">
+                      {review.userName}
+                    </Text>
+                    <Text size="1" color="gray">
+                      {getHumanState(review.state as State)}
+                    </Text>
+                    {review.date && <LastUpdate updatedAt={review.date} />}
                   </Flex>
-                );
-              })}
-            </Flex>
-          </motion.section>
+                  {review.body && (
+                    <ActivityContent
+                      body={review.body}
+                      sourceUrl={review.html_url || pullRequestUrl}
+                    />
+                  )}
+                  <GitHubLink href={review.html_url || pullRequestUrl}>
+                    Open on GitHub ↗
+                  </GitHubLink>
+                </Flex>
+              </Flex>
+            ))}
+          </Flex>
         )}
-      </AnimatePresence>
+      </div>
     </Flex>
   );
 };

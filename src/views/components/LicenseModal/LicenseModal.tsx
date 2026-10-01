@@ -108,12 +108,6 @@ export const LicenseModal = ({ isOpen, onClose }: Props) => {
             size="3"
           >
             Buy an official distribution license
-            <img
-              src={`./images/sofaOnly.png`}
-              width="30"
-              height="30"
-              style={{ borderRadius: 10, marginLeft: -7 }}
-            />
           </Button>
         </Flex>
 

@@ -21,7 +21,23 @@ import {
   markExpiryReminderShown,
   setLicenseUsage,
 } from "./mainProcess/licensing/licenseState";
-import { getPullRequests } from "./mainProcess/api/PullRequests/getPullRequests";
+import {
+  getPullRequests,
+  getPullRequestSnapshot,
+} from "./mainProcess/api/PullRequests/getPullRequests";
+import {
+  getMergeOptions,
+  getMergeStatus,
+  isMergePullRequestInput,
+  isMergeStatusInput,
+  isPullRequestIdentity,
+  mergePullRequest,
+} from "./mainProcess/api/PullRequests/mergePullRequest";
+import { PULL_REQUEST_MERGE_CHANNELS } from "./mainProcess/api/PullRequests/mergePullRequest.types";
+import type {
+  MergeStatusInput,
+  MergeStatusResult,
+} from "./mainProcess/api/PullRequests/mergePullRequest.types";
 import { getRepositories } from "./mainProcess/api/Repositories/getRepositories";
 import { setRepositoryEnableState } from "./mainProcess/api/Repositories/setRepositoryEnableState";
 import { getUser } from "./mainProcess/api/User/getUser";
@@ -47,7 +63,20 @@ import {
   Appearance,
   NOTIFICATION_KEYS,
 } from "./mainProcess/safeStorage/safeStorage.types";
+import {
+  ACCENT_COLOR_CHANNELS,
+  DEFAULT_ACCENT_COLOR,
+  isAccentColor,
+} from "./shared/theme";
+import type { AccentColor } from "./shared/theme";
 import { setToggleAllNotifications } from "./mainProcess/notifications/setToggleAllNotifications";
+import {
+  clearNotificationHistory,
+  getNotificationHistory,
+  markAllNotificationsRead,
+  markNotificationRead,
+  clearNotificationsOnSignOut,
+} from "./mainProcess/notifications/notificationManager";
 import {
   isAllowedRendererUrl,
   openExternalUrl,
@@ -84,6 +113,12 @@ let backgroundTasksStarted = false;
 let backgroundTasksInitialization: Promise<void> | null = null;
 let licenseValidationStarted = false;
 let rendererReady = false;
+let mainWindowRendererReady = false;
+type MainWindowNavigation = {
+  route: "settings" | "signIn" | "notifications";
+  notificationId?: string;
+};
+let pendingMainWindowNavigation: MainWindowNavigation | null = null;
 const isDevelopment = !app.isPackaged;
 
 const getRendererUrl = () =>
@@ -159,6 +194,61 @@ const handleRendererInvoke = <Args extends unknown[], Result>(
 };
 
 const NOTIFICATION_KEY_SET = new Set<string>(NOTIFICATION_KEYS);
+const MERGE_STATUS_POLL_INTERVAL_MS = 5_000;
+const MERGE_STATUS_MAX_POLLS = 240;
+const mergeStatusMonitors = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
+
+const refreshAfterMerge = (message: string) => {
+  void getPullRequests().catch((error) => {
+    log.warn(message, error);
+  });
+};
+
+const stopMergeMonitor = (requestId: string) => {
+  const timer = mergeStatusMonitors.get(requestId);
+  if (timer) clearTimeout(timer);
+  mergeStatusMonitors.delete(requestId);
+};
+
+const monitorQueuedMerge = (
+  input: MergeStatusInput,
+  pollCount = 0,
+) => {
+  if (mergeStatusMonitors.has(input.requestId)) return;
+
+  const poll = async () => {
+    stopMergeMonitor(input.requestId);
+    const result: MergeStatusResult = await getMergeStatus(input);
+    if (
+      result.status === "pending" &&
+      pollCount + 1 < MERGE_STATUS_MAX_POLLS
+    ) {
+      monitorQueuedMerge(input, pollCount + 1);
+      return;
+    }
+
+    if (result.status === "merged") {
+      refreshAfterMerge("[PullRequests] refresh after queued merge failed");
+      return;
+    }
+
+    if (result.status === "pending") {
+      log.warn("[PullRequests] stopped monitoring long-running merge", {
+        owner: input.owner,
+        repository: input.repository,
+        pullNumber: input.pullNumber,
+      });
+    }
+  };
+
+  const timer = setTimeout(() => {
+    void poll();
+  }, MERGE_STATUS_POLL_INTERVAL_MS);
+  mergeStatusMonitors.set(input.requestId, timer);
+};
 
 const isRepositoryEnableState = (
   data: unknown,
@@ -174,6 +264,12 @@ const isAppearance = (appearance: unknown): appearance is Appearance | null =>
   appearance === null ||
   appearance === Appearance.Light ||
   appearance === Appearance.Dark;
+
+const broadcastAccentColor = (accentColor: AccentColor) => {
+  for (const webContents of getTrustedWebContents()) {
+    webContents.send(ACCENT_COLOR_CHANNELS.updated, accentColor);
+  }
+};
 
 const isNotificationSetting = (
   setting: unknown,
@@ -250,6 +346,7 @@ if (started) {
 export const createWindow = () => {
   log.info("[Window] creating");
   diagnostics.record("main-window-creating");
+  mainWindowRendererReady = false;
 
   // Show dock icon on macOS for the main app
   if (process.platform === "darwin") {
@@ -274,6 +371,9 @@ export const createWindow = () => {
       webSecurity: true,
     },
     icon: path.join(__dirname, "images", "icon.png"),
+  });
+  mainWindow.webContents.on("did-start-loading", () => {
+    mainWindowRendererReady = false;
   });
 
   protectWebContents(mainWindow.webContents, [
@@ -325,22 +425,32 @@ export const createWindow = () => {
     showRendererFailure();
   });
 
-  mainWindow.webContents.on(
-    "console-message",
-    (_event, level, message, line, sourceId) => {
-      if (level < 2) {
-        return;
-      }
+  mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    if (level < 2) {
+      return;
+    }
 
-      log.error("[Renderer] console error", {
-        level,
-        line,
-        message: redactDiagnosticValue(message),
-        sourceId: redactDiagnosticValue(sourceId),
-      });
-    },
-  );
+    // electron-log's renderer transport writes to console.* as well as its
+    // main-process transport. Reporting that output here creates a duplicate
+    // log entry whose source is electron-log.js (and object arguments become
+    // "[object Object]").
+    if (sourceId.includes("electron-log")) {
+      return;
+    }
 
+    const details = {
+      level,
+      line,
+      message: redactDiagnosticValue(message),
+      sourceId: redactDiagnosticValue(sourceId),
+    };
+
+    if (level === 3) {
+      log.error("[Renderer] console error", details);
+    } else {
+      log.warn("[Renderer] console warning", details);
+    }
+  });
   mainWindow.on("unresponsive", () => {
     log.warn("[Window] renderer became unresponsive");
   });
@@ -416,22 +526,6 @@ app.whenReady().then(() => {
   diagnostics.startMetricsCollection();
   log.info("[App] check for updated and notify");
 
-  // Set Content Security Policy
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        "Content-Security-Policy": [
-          isDevelopment
-            ? // Development CSP - allows Vite dev server and hot reload
-              "default-src 'self' 'unsafe-inline' 'unsafe-eval' ws: http://localhost:* http://127.0.0.1:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* http://127.0.0.1:*; worker-src 'self' blob:; connect-src 'self' ws: http://localhost:* http://127.0.0.1:* https://api.github.com https://api.lemonsqueezy.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline';"
-            : // Production CSP - more restrictive
-              "default-src 'self'; script-src 'self'; connect-src 'self' https://api.github.com https://api.lemonsqueezy.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self';",
-        ],
-      },
-    });
-  });
-
   session.defaultSession.setPermissionRequestHandler(
     (_webContents, _permission, callback) => callback(false),
   );
@@ -495,9 +589,9 @@ export const performSignOut = async () => {
   disableDerivedCacheWrites();
   const signedOut = await signOut();
   if (signedOut) {
-    backgroundTasksStarted = false;
-    ipcMain.emit("dispatch-application-sign-user", null, false);
-  } else {
+    await clearNotificationsOnSignOut();
+  }
+  if (!signedOut) {
     enableDerivedCacheWrites();
     startPolling();
   }
@@ -678,8 +772,64 @@ ipcMain.on("dispatch-repository-update", (_, data) => {
 
 // ---- Pull Requests ----
 handleRendererInvoke("pull-requests-query", async () => {
-  log.info("[IPC] pull-requests-query");
-  return getPullRequests();
+  log.info("[IPC] pull-requests-query cached snapshot");
+  return getPullRequestSnapshot();
+});
+
+handleRendererInvoke(PULL_REQUEST_MERGE_CHANNELS.options, async (_, data: unknown) => {
+  if (!isPullRequestIdentity(data)) {
+    throw new Error("Invalid pull request identity.");
+  }
+
+  log.info("[IPC] pull-request-merge-options", {
+    owner: data.owner,
+    repository: data.repository,
+    pullNumber: data.pullNumber,
+  });
+  return getMergeOptions(data);
+});
+
+handleRendererInvoke(PULL_REQUEST_MERGE_CHANNELS.merge, async (_, data: unknown) => {
+  if (!isMergePullRequestInput(data)) {
+    throw new Error("Invalid pull request merge request.");
+  }
+
+  log.info("[IPC] pull-request-merge", {
+    owner: data.owner,
+    repository: data.repository,
+    pullNumber: data.pullNumber,
+    method: data.method,
+  });
+  const result = await mergePullRequest(data);
+  if (result.status === "merged" || result.status === "alreadyMerged") {
+    refreshAfterMerge("[PullRequests] refresh after merge failed");
+  } else if (
+    (result.status === "queued" || result.status === "existingRequest") &&
+    result.requestId
+  ) {
+    monitorQueuedMerge({ ...data, requestId: result.requestId });
+  }
+  return result;
+});
+
+handleRendererInvoke(PULL_REQUEST_MERGE_CHANNELS.status, async (_, data: unknown) => {
+  if (!isMergeStatusInput(data)) {
+    throw new Error("Invalid pull request merge status request.");
+  }
+
+  log.info("[IPC] pull-request-merge-status", {
+    owner: data.owner,
+    repository: data.repository,
+    pullNumber: data.pullNumber,
+  });
+  const result = await getMergeStatus(data);
+  if (result.status !== "pending") {
+    stopMergeMonitor(data.requestId);
+  }
+  if (result.status === "merged") {
+    refreshAfterMerge("[PullRequests] refresh after queued merge failed");
+  }
+  return result;
 });
 
 ipcMain.on("dispatch-pull-request-update", (_, data) => {
@@ -764,15 +914,42 @@ handleRendererInvoke("set-application-appearance", async (_, appearance) => {
 
   log.info("[IPC] set-application-appearance", { appearance });
 
-  ipcMain.emit("dispatch-application-appearance-update", null, appearance);
+  const saved = await storeData({ name: "appearance", data: appearance });
+  if (!saved) {
+    throw new Error("Unable to save appearance.");
+  }
 
-  return storeData({ name: "appearance", data: appearance });
+  ipcMain.emit("dispatch-application-appearance-update", null, appearance);
+  return appearance;
 });
 
 handleRendererInvoke("get-application-appearance", async () => {
   log.info("[IPC] get-application-appearance");
   return getData("appearance");
 });
+
+handleRendererInvoke(ACCENT_COLOR_CHANNELS.get, async () => {
+  log.info("[IPC] get-application-accent-color");
+  const accentColor = await getData("accentColor");
+  return isAccentColor(accentColor) ? accentColor : DEFAULT_ACCENT_COLOR;
+});
+
+handleRendererInvoke(ACCENT_COLOR_CHANNELS.set, async (_, accentColor) => {
+  if (!isAccentColor(accentColor)) {
+    throw new Error("Invalid accent color.");
+  }
+
+  log.info("[IPC] set-application-accent-color", { accentColor });
+  const wasStored = await storeData({ name: "accentColor", data: accentColor });
+  if (!wasStored) {
+    throw new Error("Unable to save accent color.");
+  }
+
+  broadcastAccentColor(accentColor);
+  return accentColor;
+});
+
+handleRendererInvoke("get-application-version", () => app.getVersion());
 
 ipcMain.on("dispatch-application-appearance-update", (_, data) => {
   log.info("[IPC] dispatch-application-appearance-update");
@@ -787,12 +964,36 @@ handleRendererInvoke("get-application-notification", async () => {
   return getNotificationsSettings();
 });
 
-handleRendererInvoke(
-  "set-application-toggle-notification",
-  async (_, enable) => {
-    if (typeof enable !== "boolean") {
-      throw new Error("Invalid notification setting.");
-    }
+handleRendererInvoke("get-notification-history", () => getNotificationHistory());
+handleRendererInvoke("mark-notification-read", async (_, id: unknown) => {
+  if (typeof id !== "string" || id.length === 0) {
+    throw new Error("Invalid notification id.");
+  }
+  return markNotificationRead(id);
+});
+handleRendererInvoke("mark-all-notifications-read", () => markAllNotificationsRead());
+handleRendererInvoke("clear-notification-history", () => clearNotificationHistory());
+
+ipcMain.on("dispatch-notification-update", (_, data) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("notification-update", data);
+  }
+});
+
+ipcMain.on("dispatch-notification-click", (_, notificationId: unknown) => {
+  if (typeof notificationId !== "string") return;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  }
+  queueOrSendMainWindowNavigation({ route: "notifications", notificationId });
+  mainWindow?.show();
+  mainWindow?.focus();
+});
+
+handleRendererInvoke("set-application-toggle-notification", async (_, enable) => {
+  if (typeof enable !== "boolean") {
+    throw new Error("Invalid notification setting.");
+  }
 
     log.info("[IPC] set-application-notification");
     return setToggleAllNotifications(enable);
@@ -814,7 +1015,11 @@ handleRendererInvoke(
 handleRendererInvoke("get-application-start-at-login", async () => {
   log.info("[IPC] get-application-start-at-login");
 
-  return getData("open_at_login");
+  if (process.platform === "darwin" || process.platform === "win32") {
+    return app.getLoginItemSettings().openAtLogin;
+  }
+
+  return (await getData("open_at_login")) ?? false;
 });
 
 // ---- Menubar Density ----
@@ -835,7 +1040,10 @@ handleRendererInvoke("set-menubar-density", async (_, density: unknown) => {
   log.info("[IPC] set-menubar-density", validatedDensity);
   const prev = await getData("appSettings");
   const newSettings = { ...prev, menubarDensity: validatedDensity };
-  await storeData({ name: "appSettings", data: newSettings });
+  const saved = await storeData({ name: "appSettings", data: newSettings });
+  if (!saved) {
+    throw new Error("Unable to save menu bar settings.");
+  }
   ipcMain.emit("dispatch-menubar-density-update", null, validatedDensity);
   return validatedDensity;
 });
@@ -850,12 +1058,39 @@ handleRendererInvoke(
 
     log.info("[IPC] set-application-start-at-login", isStartingAtLogin);
 
-    app.setLoginItemSettings({
-      openAtLogin: isStartingAtLogin,
-    });
+    if (process.platform !== "darwin" && process.platform !== "win32") {
+      throw new Error("Open at login is supported only on macOS and Windows.");
+    }
 
-    log.info("[IPC] set-application-start-at-login", isStartingAtLogin);
-    await storeData({ name: "open_at_login", data: isStartingAtLogin });
+    const previousValue = app.getLoginItemSettings().openAtLogin;
+    try {
+      app.setLoginItemSettings({ openAtLogin: isStartingAtLogin });
+      const actualValue = app.getLoginItemSettings().openAtLogin;
+      if (actualValue !== isStartingAtLogin) {
+        throw new Error(
+          process.platform === "darwin"
+            ? "macOS did not enable this login item. Use the signed and notarized Cozy Watch app, then try again."
+            : "Windows did not update the startup setting. Please try again.",
+        );
+      }
+
+      const saved = await storeData({
+        name: "open_at_login",
+        data: isStartingAtLogin,
+      });
+      if (!saved) {
+        throw new Error("Unable to save the Open at login setting.");
+      }
+
+      return actualValue;
+    } catch (error) {
+      try {
+        app.setLoginItemSettings({ openAtLogin: previousValue });
+      } catch (restoreError) {
+        log.warn("[IPC] unable to restore start-at-login setting", restoreError);
+      }
+      throw error;
+    }
   },
 );
 
@@ -873,14 +1108,38 @@ handleRendererInvoke("diagnostics-export-bundle", () =>
   diagnostics.exportBundle(mainWindow),
 );
 
-handleRendererInvoke("diagnostics-renderer-ready", () => {
+handleRendererInvoke("diagnostics-renderer-ready", (event) => {
   diagnostics.record("renderer-first-paint");
   rendererReady = true;
+  if (event.sender === mainWindow?.webContents) {
+    mainWindowRendererReady = true;
+    if (pendingMainWindowNavigation) {
+      mainWindow.webContents.send(
+        "navigate-to-route",
+        pendingMainWindowNavigation,
+      );
+      pendingMainWindowNavigation = null;
+    }
+  }
   startBackgroundTasks();
 });
 
+const queueOrSendMainWindowNavigation = (navigation: MainWindowNavigation) => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    pendingMainWindowNavigation = navigation;
+    return;
+  }
+
+  if (!mainWindowRendererReady || mainWindow.webContents.isLoading()) {
+    pendingMainWindowNavigation = navigation;
+    return;
+  }
+
+  mainWindow.webContents.send("navigate-to-route", navigation);
+};
+
 handleRendererInvoke("on-application-navigate-to-route", (_, route) => {
-  if (route !== "settings" && route !== "signIn") {
+  if (route !== "settings" && route !== "signIn" && route !== "notifications") {
     throw new Error("Invalid navigation route.");
   }
 
@@ -893,16 +1152,7 @@ handleRendererInvoke("on-application-navigate-to-route", (_, route) => {
 
   if (mainWindow && !mainWindow.isDestroyed()) {
     log.info("[IPC] mainWindow send navigate-to-route", route);
-
-    // Wait for window to be ready before sending route
-    if (mainWindow.webContents.isLoading()) {
-      mainWindow.webContents.once("did-finish-load", () => {
-        mainWindow?.webContents.send("navigate-to-route", route);
-      });
-    } else {
-      mainWindow.webContents.send("navigate-to-route", route);
-    }
-
+    queueOrSendMainWindowNavigation({ route });
     mainWindow.show();
     mainWindow.focus();
   }

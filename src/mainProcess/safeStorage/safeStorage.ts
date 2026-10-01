@@ -1,6 +1,6 @@
 import { app, safeStorage } from "electron";
 import log from "electron-log";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, unlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { APP_NAME } from "../keys";
@@ -168,10 +168,28 @@ const waitForStorageMutations = async (filePath: string) => {
   }
 };
 
+const removeLegacyStorage = async () => {
+  try {
+    await unlink(LEGACY_STORAGE_PATH);
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return;
+    }
+    throw error;
+  }
+};
+
 const migrateLegacyStorage = async (): Promise<EncryptedStorageObject> => {
   const primaryPath = getPrimaryStoragePath();
   if (await pathExists(primaryPath)) {
-    return readStorageFile(primaryPath, false);
+    const storage = await readStorageFile(primaryPath, false);
+    await removeLegacyStorage();
+    return storage;
   }
 
   if (!(await pathExists(LEGACY_STORAGE_PATH))) {
@@ -214,11 +232,7 @@ const migrateLegacyStorage = async (): Promise<EncryptedStorageObject> => {
     }
   }
   await writeStorageFile(primaryPath, migratedStorage);
-  await writeStorageFile(LEGACY_STORAGE_PATH, migratedStorage).catch((error) => {
-    log.warn("[Storage] Could not update the legacy storage backup", {
-      message: error instanceof Error ? error.message : "Unknown error",
-    });
-  });
+  await removeLegacyStorage();
   performanceDiagnostics.record("storage-migration-completed", {
     discardedCacheCount:
       Object.keys(legacyStorage).length - Object.keys(migratedStorage).length,
@@ -376,6 +390,9 @@ export const getData = async <T extends StoreDataName>(
 export const deleteDataOrThrow = async (name: StoreDataName) => {
   await app.whenReady();
   const { filePath, storage } = await getStorageForName(name);
+  if (name === "access_token") {
+    await removeLegacyStorage();
+  }
   return mutateStorageFile(filePath, storage, (draft) => {
     if (!draft[name]) {
       log.warn(`[Storage] No data found for key: ${name}`);
@@ -399,6 +416,7 @@ export const deleteAllData = async () => {
   try {
     await app.whenReady();
     const primaryStorage = await getPrimaryStorage();
+    await removeLegacyStorage();
     await mutateStorageFile(
       getPrimaryStoragePath(),
       primaryStorage,

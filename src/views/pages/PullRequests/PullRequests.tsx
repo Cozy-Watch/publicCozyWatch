@@ -14,6 +14,7 @@ import {
 } from "@radix-ui/themes";
 import { useNavigate } from "@tanstack/react-router";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
+import { MergePullRequestAction } from "../../components/MergePullRequestAction/MergePullRequestAction";
 import { renderSafeMarkdown } from "../../utils/renderSafeMarkdown";
 import { usePullRequests } from "./usePullRequests";
 
@@ -25,7 +26,6 @@ export const PullRequests = () => {
   if (isPending) {
     return (
       <Flex direction="column" flexGrow="1" align="center" justify="center">
-        <img id="sofa" src="./images/sofaOnly.png" width="150" />
         <Text size="2">
           <Em>Loading Pull Requests</Em>
         </Text>
@@ -55,11 +55,6 @@ export const PullRequests = () => {
     if (countActiveRepositories === 0 && countRepositories > 0) {
       return (
         <Flex direction="column" flexGrow="1" align="center" justify="center">
-          <img
-            src="./images/sofaOnly.png"
-            width="150"
-            style={{ opacity: 0.1 }}
-          />
           <Flex direction="column" gap="4" align="center">
             <Text>
               <Em>
@@ -86,7 +81,6 @@ export const PullRequests = () => {
 
     return (
       <Flex direction="column" flexGrow="1" align="center" justify="center">
-        <img src="./images/sofaOnly.png" width="150" style={{ opacity: 0.1 }} />
         <Text>
           <Em>You don't have any pull requests</Em>
         </Text>
@@ -278,6 +272,9 @@ export const PullRequests = () => {
                                       </Flex>
 
                                       <Flex gap="2">
+                                        <MergePullRequestAction
+                                          pullRequest={pullRequest}
+                                        />
                                         <Tooltip content="Copy Branch Name">
                                           <Button
                                             size="1"

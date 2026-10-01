@@ -18,11 +18,14 @@ export const setNotificationSettings = async ({
     storedNotifications?.[notificationKey] ||
     NOTIFICATION_DEFAULT_SETTINGS[notificationKey];
 
-  await storeData({
+  const saved = await storeData({
     name: "notifications",
     data: {
       ...(storedNotifications ?? NOTIFICATION_DEFAULT_SETTINGS),
       [notificationKey]: { ...selectedNotification, value: checked },
     },
   });
+  if (!saved) {
+    throw new Error("Unable to save notification settings.");
+  }
 };

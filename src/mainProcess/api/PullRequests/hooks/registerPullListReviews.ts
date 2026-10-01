@@ -25,9 +25,15 @@ export const registerPullListReviews = ({
         const urlParts = options.url.split("/");
 
         const repoName = urlParts[5];
+        const pullNumber = urlParts[7];
 
-        if (page && cache.etagPerRepo?.[repoName]?.reviews?.[page]) {
+        if (
+          page &&
+          (cache.etagPerRepo?.[repoName]?.reviews?.[`${pullNumber}_${page}`] ||
+            cache.etagPerRepo?.[repoName]?.reviews?.[page])
+        ) {
           options.headers["if-none-match"] =
+            cache.etagPerRepo?.[repoName]?.reviews?.[`${pullNumber}_${page}`] ??
             cache.etagPerRepo?.[repoName]?.reviews?.[page];
         }
       },
@@ -53,7 +59,7 @@ export const registerPullListReviews = ({
                 ...(cache.etagPerRepo?.[repoName] ?? {}),
                 reviews: {
                   ...(cache.etagPerRepo?.[repoName]?.reviews ?? {}),
-                  [page]: etag,
+                  [`${pullNumber}_${page}`]: etag,
                 },
               },
             };

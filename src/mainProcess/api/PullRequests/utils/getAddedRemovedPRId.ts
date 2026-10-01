@@ -1,4 +1,5 @@
 import { CacheData } from "./getDefaultData";
+import { dedupePullRequests } from "./dedupePullRequests";
 
 interface Params {
   repositoryName: string;
@@ -13,9 +14,9 @@ export const getAddedRemovedPRId = ({
   initialCache,
   userId,
 }: Params) => {
-  const allInitial = Object.values(
-    initialCache.pullRequestsPerRepo[repositoryName] || {}
-  ).flat();
+  const allInitial = dedupePullRequests(
+    Object.values(initialCache.pullRequestsPerRepo[repositoryName] || {}).flat(),
+  );
   const initial = allInitial.filter(
     (pr) =>
       pr?.user?.id === userId ||
@@ -23,11 +24,11 @@ export const getAddedRemovedPRId = ({
       pr?.requested_reviewers?.some((reviewer) => reviewer.id === userId)
   );
 
-  const initialIds = initial.map((pr) => pr.id);
+  const initialIds = new Set(initial.map((pr) => pr.id));
 
-  const allFinal = Object.values(
-    finalCache.pullRequestsPerRepo[repositoryName] || {}
-  ).flat();
+  const allFinal = dedupePullRequests(
+    Object.values(finalCache.pullRequestsPerRepo[repositoryName] || {}).flat(),
+  );
 
   const final = allFinal.filter(
     (pr) =>
@@ -36,10 +37,10 @@ export const getAddedRemovedPRId = ({
       pr?.requested_reviewers?.some((reviewer) => reviewer.id === userId)
   );
 
-  const finalIds = final.map((pr) => pr.id);
+  const finalIds = new Set(final.map((pr) => pr.id));
 
-  const removed = initialIds.filter((id) => !finalIds.includes(id));
-  const added = finalIds.filter((id) => !initialIds.includes(id));
+  const removed = [...initialIds].filter((id) => !finalIds.has(id));
+  const added = [...finalIds].filter((id) => !initialIds.has(id));
 
   return { added, removed };
 };

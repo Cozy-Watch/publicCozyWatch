@@ -65,7 +65,9 @@ const countSubmittedReviews = async (weekStart: string) => {
           return;
         }
 
-        const [, , owner, repo] = item.repository_url.split("/");
+        const [, , owner, repo] = new URL(item.repository_url).pathname.split(
+          "/",
+        );
         if (!owner || !repo) {
           return;
         }

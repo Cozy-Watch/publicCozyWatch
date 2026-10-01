@@ -2,6 +2,7 @@ import { ipcMain } from "electron";
 import Logger from "electron-log";
 import { storeData } from "../../safeStorage/safeStorage";
 import { getCachedData as pullRequestCachedData } from "../PullRequests/utils/getDefaultData";
+import { dedupePullRequests } from "../PullRequests/utils/dedupePullRequests";
 import { getCachedData, setLocalCache } from "./utils/getDefaultData";
 
 export const setRepositoryEnableState = async (
@@ -22,12 +23,11 @@ export const setRepositoryEnableState = async (
     activeRepositories,
   };
 
-  const flatPullRequests = Object.values(
-    pullRequestsCache.pullRequestsPerRepo || {},
+  const flatPullRequests = dedupePullRequests(
+    Object.values(pullRequestsCache.pullRequestsPerRepo || {}).flatMap(
+      (value) => Object.values(value).flat(),
+    ),
   )
-    .flatMap((value) => {
-      return Object.values(value).flat();
-    })
     .filter((pr) => {
       return activeRepositories?.[pr.base.repo.id];
     })

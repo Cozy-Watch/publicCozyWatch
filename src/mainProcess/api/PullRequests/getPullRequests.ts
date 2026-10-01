@@ -3,31 +3,19 @@ import {
   pullRequestQuery,
   PullRequestQueryResult,
 } from "./queries/getPullRequestQuery";
+import { getCachedData } from "./utils/getDefaultData";
+import type { CacheData } from "./utils/getDefaultData";
+import { refreshCoordinator } from "../../polling/refreshCoordinator";
 
-let inFlightPromiseee: Promise<PullRequestQueryResult> | null = null;
+/**
+ * Returns the latest app-owned snapshot without starting or waiting for GitHub I/O.
+ * Renderers use this for their initial view; polling owns synchronization.
+ */
+export const getPullRequestSnapshot = async (): Promise<CacheData> => {
+  Logger.info("[PullRequests] Returning cached snapshot");
+  return getCachedData();
+};
 
 export const getPullRequests = async (): Promise<PullRequestQueryResult> => {
-  Logger.info("[PullRequests] Query starting");
-
-  // If cache is empty, proceed with the full query as before
-  if (inFlightPromiseee) {
-    Logger.info(
-      "[PullRequests] Request already in flight, returning existing promise"
-    );
-    return inFlightPromiseee;
-  }
-
-  Logger.info("[PullRequests] No cache available, starting new request");
-
-  inFlightPromiseee = pullRequestQuery();
-
-  try {
-    return await inFlightPromiseee;
-  } catch (error) {
-    Logger.error("[PullRequests] Error during request", error);
-    throw error;
-  } finally {
-    Logger.info("[PullRequests] Finally clearing inFlightPromiseee");
-    inFlightPromiseee = null;
-  }
+  return refreshCoordinator.runFull((isCurrent) => pullRequestQuery(isCurrent));
 };

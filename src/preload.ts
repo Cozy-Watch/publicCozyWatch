@@ -6,9 +6,23 @@ import type { IpcRendererEvent } from "electron";
 import { CacheData as PullRequest } from "./mainProcess/api/PullRequests/utils/getDefaultData";
 import {
   Appearance,
+  NotificationRecord,
   RepositoriesCache,
 } from "./mainProcess/safeStorage/safeStorage.types";
 import type { PersonalWeeklyRecap } from "./weeklyRecap/types";
+import type {
+  MergeOptions,
+  MergePullRequestInput,
+  MergeResult,
+  MergeStatusInput,
+  MergeStatusResult,
+  PullRequestIdentity,
+} from "./mainProcess/api/PullRequests/mergePullRequest.types";
+import { PULL_REQUEST_MERGE_CHANNELS } from "./mainProcess/api/PullRequests/mergePullRequest.types";
+import {
+  ACCENT_COLOR_CHANNELS,
+  type AccentColor,
+} from "./shared/theme";
 
 type IpcListener<T> = (event: IpcRendererEvent, data: T) => void;
 type AuthenticationCode = {
@@ -19,12 +33,20 @@ type AuthenticationCode = {
 contextBridge.exposeInMainWorld("electronAPI", {
   application: {
     // Application Settings
-    setApplicationAppearance: (appearance: Appearance | null) => {
+    setApplicationAppearance: (
+      appearance: Appearance | null,
+    ): Promise<Appearance | null> => {
       return ipcRenderer.invoke("set-application-appearance", appearance);
     },
     getApplicationAppearance: (): Promise<Appearance | null> => {
       return ipcRenderer.invoke("get-application-appearance");
     },
+    setApplicationAccentColor: (accentColor: AccentColor): Promise<AccentColor> =>
+      ipcRenderer.invoke(ACCENT_COLOR_CHANNELS.set, accentColor),
+    getApplicationAccentColor: (): Promise<AccentColor> =>
+      ipcRenderer.invoke(ACCENT_COLOR_CHANNELS.get),
+    getVersion: (): Promise<string> =>
+      ipcRenderer.invoke("get-application-version"),
 
     // Menubar Density
     getMenubarDensity: (): Promise<"compact" | "default"> => {
@@ -41,6 +63,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
     removeOnApplicationAppearanceUpdate: (handler: IpcListener<Appearance>) =>
       ipcRenderer.removeListener("pull-application-appearance-update", handler),
+    onApplicationAccentColorUpdate: (
+      callback: (data: AccentColor) => void,
+    ) => {
+      const handler: IpcListener<AccentColor> = (_event, data) => callback(data);
+      ipcRenderer.on(ACCENT_COLOR_CHANNELS.updated, handler);
+      return handler;
+    },
+    removeOnApplicationAccentColorUpdate: (handler: IpcListener<AccentColor>) =>
+      ipcRenderer.removeListener(ACCENT_COLOR_CHANNELS.updated, handler),
 
     // ----- SIGN IN / SIGN OUT -----
     signUser: (isSignIn: boolean) => {
@@ -88,6 +119,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
         key,
       });
     },
+    getNotificationHistory: (): Promise<NotificationRecord[]> =>
+      ipcRenderer.invoke("get-notification-history"),
+    markNotificationRead: (id: string): Promise<void> =>
+      ipcRenderer.invoke("mark-notification-read", id),
+    markAllNotificationsRead: (): Promise<void> =>
+      ipcRenderer.invoke("mark-all-notifications-read"),
+    clearNotificationHistory: (): Promise<void> =>
+      ipcRenderer.invoke("clear-notification-history"),
+    onNotificationUpdate: (callback: (data: NotificationRecord[]) => void) => {
+      const handler: IpcListener<NotificationRecord[]> = (_event, data) => callback(data);
+      ipcRenderer.on("notification-update", handler);
+      return handler;
+    },
+    removeOnNotificationUpdate: (handler: IpcListener<NotificationRecord[]>) =>
+      ipcRenderer.removeListener("notification-update", handler),
 
     getStartAtLogin: () => {
       return ipcRenderer.invoke("get-application-start-at-login");
@@ -109,19 +155,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("diagnostics-export-bundle"),
     reportRendererReady: () => ipcRenderer.invoke("diagnostics-renderer-ready"),
 
-    navigateToRoute: (route: "settings" | "signIn") => {
+    navigateToRoute: (route: "settings" | "signIn" | "notifications") => {
       return ipcRenderer.invoke("on-application-navigate-to-route", route);
     },
 
-    onNavigateToRoute: (callback: (route: "settings" | "signIn") => void) => {
-      const handler: IpcListener<"settings" | "signIn"> = (_event, data) => {
+    onNavigateToRoute: (callback: (event: { route: "settings" | "signIn" | "notifications"; notificationId?: string }) => void) => {
+      const handler: IpcListener<{ route: "settings" | "signIn" | "notifications"; notificationId?: string }> = (_event, data) => {
         callback(data);
       };
       ipcRenderer.on("navigate-to-route", handler);
       return handler;
     },
 
-    removeOnNavigateToRoute: (handler: IpcListener<"settings" | "signIn">) =>
+    removeOnNavigateToRoute: (
+      handler: IpcListener<{ route: "settings" | "signIn" | "notifications"; notificationId?: string }>,
+    ) =>
       ipcRenderer.removeListener("navigate-to-route", handler),
   },
 
@@ -129,7 +177,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   signOut: () => ipcRenderer.invoke("signOut"),
 
   openExternalLink: (url: string) => {
-    ipcRenderer.invoke("open-external-url", url);
+    return ipcRenderer.invoke("open-external-url", url);
   },
   copyToClipboard: (text: string) => {
     ipcRenderer.invoke("copy-to-clipboard", text);
@@ -213,6 +261,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
     removeOnUpdate: (handler: IpcListener<PullRequest>) =>
       ipcRenderer.removeListener("pull-request-update", handler),
+    getMergeOptions: (
+      identity: PullRequestIdentity,
+    ): Promise<MergeOptions | MergeResult> =>
+      ipcRenderer.invoke(PULL_REQUEST_MERGE_CHANNELS.options, identity),
+    merge: (input: MergePullRequestInput): Promise<MergeResult> =>
+      ipcRenderer.invoke(PULL_REQUEST_MERGE_CHANNELS.merge, input),
+    getMergeStatus: (input: MergeStatusInput): Promise<MergeStatusResult> =>
+      ipcRenderer.invoke(PULL_REQUEST_MERGE_CHANNELS.status, input),
   },
 
   weeklyRecap: {

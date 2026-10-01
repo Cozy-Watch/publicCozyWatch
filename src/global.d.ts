@@ -5,12 +5,22 @@ import {
   User,
   Appearance,
   NotificationSettingsPerKey,
+  NotificationRecord,
 } from "./mainProcess/safeStorage/safeStorage.types";
 import {
   LicenseState,
   LicenseUsage,
 } from "./mainProcess/licensing/licenseState.types";
+import type { AccentColor } from "./shared/theme";
 import type { PersonalWeeklyRecap } from "./weeklyRecap/types";
+import type {
+  MergeOptions,
+  MergePullRequestInput,
+  MergeResult,
+  MergeStatusInput,
+  MergeStatusResult,
+  PullRequestIdentity,
+} from "./mainProcess/api/PullRequests/mergePullRequest.types";
 
 export {};
 
@@ -28,8 +38,15 @@ declare global {
   interface Window {
     electronAPI: {
       application: {
-        setApplicationAppearance: (appearance: Appearance | null) => void;
+        setApplicationAppearance: (
+          appearance: Appearance | null,
+        ) => Promise<Appearance | null>;
         getApplicationAppearance: () => Promise<Appearance | null>;
+        setApplicationAccentColor: (
+          accentColor: AccentColor,
+        ) => Promise<AccentColor>;
+        getApplicationAccentColor: () => Promise<AccentColor>;
+        getVersion: () => Promise<string>;
 
         // Menubar Density
         getMenubarDensity: () => Promise<"compact" | "default">;
@@ -43,6 +60,12 @@ declare global {
         removeOnApplicationAppearanceUpdate: (
           callback: IpcListener<Appearance>,
         ) => void;
+        onApplicationAccentColorUpdate: (
+          callback: (data: AccentColor) => void,
+        ) => IpcListener<AccentColor>;
+        removeOnApplicationAccentColorUpdate: (
+          callback: IpcListener<AccentColor>,
+        ) => void;
 
         onSignOut: (callback: (data: boolean) => void) => IpcListener<boolean>;
         removeOnSignOut: (callback: IpcListener<boolean>) => void;
@@ -54,7 +77,9 @@ declare global {
         removeOnSignUser: (handler: IpcListener<boolean>) => void;
 
         getNotificationsSettings: () => Promise<NotificationSettingsPerKey>;
-        setToggleAllNotifications: (enabled: boolean) => Promise<void>;
+        setToggleAllNotifications: (
+          enabled: boolean,
+        ) => Promise<NotificationSettingsPerKey>;
         setNotificationSetting: ({
           checked,
           key,
@@ -62,6 +87,16 @@ declare global {
           checked: boolean;
           key: string;
         }) => Promise<NotificationSettingsPerKey>;
+        getNotificationHistory: () => Promise<NotificationRecord[]>;
+        markNotificationRead: (id: string) => Promise<void>;
+        markAllNotificationsRead: () => Promise<void>;
+        clearNotificationHistory: () => Promise<void>;
+        onNotificationUpdate: (
+          callback: (data: NotificationRecord[]) => void,
+        ) => IpcListener<NotificationRecord[]>;
+        removeOnNotificationUpdate: (
+          callback: IpcListener<NotificationRecord[]>,
+        ) => void;
 
         getStartAtLogin: () => Promise<boolean>;
         setStartAtLogin: (isOpenAtLogin: boolean) => Promise<boolean>;
@@ -72,12 +107,21 @@ declare global {
         exportDiagnosticsBundle: () => Promise<{ saved: boolean }>;
         reportRendererReady: () => Promise<void>;
 
-        navigateToRoute: (route: "settings" | "signIn") => void;
+        navigateToRoute: (route: "settings" | "signIn" | "notifications") => void;
         onNavigateToRoute: (
-          callback: (route: "settings" | "signIn") => void,
-        ) => IpcListener<"settings" | "signIn">;
+          callback: (event: {
+            route: "settings" | "signIn" | "notifications";
+            notificationId?: string;
+          }) => void,
+        ) => IpcListener<{
+          route: "settings" | "signIn" | "notifications";
+          notificationId?: string;
+        }>;
         removeOnNavigateToRoute: (
-          callback: IpcListener<"settings" | "signIn">,
+          callback: IpcListener<{
+            route: "settings" | "signIn" | "notifications";
+            notificationId?: string;
+          }>,
         ) => void;
       };
 
@@ -124,6 +168,11 @@ declare global {
           callback: (data: PullRequestDTO) => void,
         ) => IpcListener<PullRequestDTO>;
         removeOnUpdate: (callback: IpcListener<PullRequestDTO>) => void;
+        getMergeOptions: (
+          identity: PullRequestIdentity,
+        ) => Promise<MergeOptions | MergeResult>;
+        merge: (input: MergePullRequestInput) => Promise<MergeResult>;
+        getMergeStatus: (input: MergeStatusInput) => Promise<MergeStatusResult>;
       };
 
       weeklyRecap: {
@@ -141,7 +190,7 @@ declare global {
       };
 
       // Open external URL
-      openExternalLink: (url: string) => void;
+      openExternalLink: (url: string) => Promise<void>;
       // Copy to Clipboard
       copyToClipboard: (text: string) => void;
     };

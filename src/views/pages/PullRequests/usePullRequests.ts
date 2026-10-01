@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useRepositoriesQuery } from "../../api/useRepositoriesQuery";
 import { usePullRequestQuery } from "../../api/usePullRequestQuery";
+import { dedupePullRequests } from "../../../mainProcess/api/PullRequests/utils/dedupePullRequests";
 
 export const usePullRequests = () => {
   const pullRequestsQueryInfo = usePullRequestQuery();
@@ -24,9 +25,9 @@ export const usePullRequests = () => {
       (repository) => {
         const { name: repoName } = repository;
 
-        const prData = Object.values(
-          pullRequestsPerRepo[repoName] || []
-        ).flat();
+        const prData = dedupePullRequests(
+          Object.values(pullRequestsPerRepo[repoName] || {}).flat(),
+        );
 
         type WorkflowRun = NonNullable<typeof actionsPerRepo[string]>[number];
         const groupWorkflows = (actionsPerRepo[repoName] ?? []).reduce(

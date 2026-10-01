@@ -35,12 +35,12 @@ const momentum = ({
     return "Steady vs last week";
   }
   if (previousMergedCount === 0) {
-    return mergedCount === 0 ? "Steady vs last week" : `+${mergedCount} vs last week`;
+    return mergedCount === 0
+      ? "Steady vs last week"
+      : `+${mergedCount} vs last week`;
   }
   const delta = mergedCount - previousMergedCount;
-  return delta > 0
-    ? `+${delta} vs last week`
-    : `${delta} vs last week`;
+  return delta > 0 ? `+${delta} vs last week` : `${delta} vs last week`;
 };
 
 export const WeeklyRecap = () => {
@@ -51,74 +51,79 @@ export const WeeklyRecap = () => {
     void window.electronAPI.weeklyRecap
       .personal(getLastCompletedWeekStart())
       .then(setRecap)
-      .catch(() => setError("Weekly activity is unavailable right now."));
+      .catch(() =>
+        setError(
+          "Your weekly recap will appear here with PRs you merged and reviews you gave.",
+        ),
+      );
   }, []);
 
   const trend = recap ? momentum(recap) : null;
 
   return (
-    <Card
-      className="accent-shadow-low"
-      m="4"
-      mt="0"
-      style={{
-        background:
-          "linear-gradient(135deg, var(--accent-a1), var(--accent-a4), var(--accent-a1))",
-      }}
-    >
-      <Flex direction="column" gap="3">
-        <Flex
-          justify="between"
-          align="center"
-          style={{ color: "var(--accent-10)" }}
-        >
-          <Flex direction="column">
-            <Text size="1" style={{ color: "var(--gray-11)" }}>
-              Your week on CozyWatch
-            </Text>
-            {recap ? (
-              <Text
-                size="5"
-                weight="bold"
-                style={{ color: "var(--accent-12)" }}
-              >
-                {headline(recap)}
+    <Flex direction="column">
+      <Card
+        className="accent-shadow-low"
+        style={{
+          background:
+            "linear-gradient(135deg, var(--accent-a1), var(--accent-a4), var(--accent-a1))",
+          width: "100%",
+        }}
+      >
+        <Flex direction="column" gap="3">
+          <Flex
+            justify="between"
+            align="center"
+            style={{ color: "var(--accent-10)" }}
+          >
+            <Flex direction="column">
+              <Text size="1" style={{ color: "var(--white-a11)" }}>
+                Your week on CozyWatch
               </Text>
-            ) : null}
+              {recap ? (
+                <Text
+                  size="5"
+                  weight="bold"
+                  style={{ color: "var(--accent-12)" }}
+                >
+                  {headline(recap)}
+                </Text>
+              ) : null}
+            </Flex>
+            <TrophyIcon size={20} />
           </Flex>
-          <TrophyIcon size={20} />
+          {error ? (
+            <Text size="2" color="gray">
+              {error}
+            </Text>
+          ) : !recap ? (
+            <Flex gap="3">
+              <Skeleton height="62px" width="180px" />
+              <Skeleton height="62px" width="120px" />
+            </Flex>
+          ) : (
+            <Flex direction="column" gap="1">
+              <Text size="2" style={{ color: "var(--gray-11)" }}>
+                {formatWeek(recap.weekStart, recap.weekEnd)}
+              </Text>
+              <Text size="2" style={{ color: "var(--gray-11)" }}>
+                {plural(recap.mergedCount, "PR")} merged across{" "}
+                {plural(recap.repositoryCount, "repository", "repositories")},{" "}
+                {plural(recap.reviewedCount, "review")} given
+              </Text>
+              {trend ? (
+                <Text
+                  size="2"
+                  weight="medium"
+                  style={{ color: "var(--accent-11)" }}
+                >
+                  {trend}
+                </Text>
+              ) : null}
+            </Flex>
+          )}
         </Flex>
-        {error ? (
-          <Text size="2" color="gray">
-            {error}
-          </Text>
-        ) : !recap ? (
-          <Flex gap="3">
-            <Skeleton height="62px" width="180px" />
-            <Skeleton height="62px" width="120px" />
-          </Flex>
-        ) : (
-          <Flex direction="column" gap="1">
-            <Text size="2" style={{ color: "var(--gray-11)" }}>
-              {formatWeek(recap.weekStart, recap.weekEnd)}
-            </Text>
-            <Text size="2" style={{ color: "var(--gray-11)" }}>
-              {plural(recap.mergedCount, "PR")} merged across{" "}
-              {plural(recap.repositoryCount, "repository", "repositories")},{" "}
-              {plural(recap.reviewedCount, "review")} given
-            </Text>
-            {trend ? (
-              <Text
-                size="2"
-                weight="medium"
-                style={{ color: "var(--accent-11)" }}
-              >
-                {trend}
-              </Text>
-            ) : null}
-          </Flex>
-        )}
-      </Flex>
-    </Card>
+      </Card>
+    </Flex>
   );
 };

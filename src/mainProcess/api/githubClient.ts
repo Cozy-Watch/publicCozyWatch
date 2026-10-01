@@ -8,6 +8,9 @@ import {
 } from "../safeStorage/safeStorage";
 import { AuthType } from "../safeStorage/safeStorage.types";
 import Logger from "electron-log";
+import { refreshCoordinator } from "../polling/refreshCoordinator";
+import { setLocalCache as setPullCache } from "./PullRequests/utils/getDefaultData";
+import { setLocalCache as setRepositoryCache } from "./Repositories/utils/getDefaultData";
 
 // Compose Octokit with the throttling plugin
 const Octokit = OctokitCore.plugin(throttling);
@@ -225,6 +228,9 @@ export const createGithubClient = async () => {
  * Clears all stored data and resets the Octokit instance.
  */
 export const signOut = async () => {
+  refreshCoordinator.invalidate();
+  setPullCache(null);
+  setRepositoryCache(null);
   try {
     Logger.info("[Octokit] Signing out...");
     await Promise.all([

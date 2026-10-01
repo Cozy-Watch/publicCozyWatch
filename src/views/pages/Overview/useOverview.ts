@@ -5,6 +5,8 @@ import { usePullRequestQuery } from "../../api/usePullRequestQuery";
 import { useRepositoriesQuery } from "../../api/useRepositoriesQuery";
 import { useHeader } from "../Header/useHeader";
 import { getReviewsGroupedByUser } from "../../hooks/utils/getReviewsGroupedByUser";
+import { orderPullRequestsByLatestFeedback } from "../../hooks/utils/sortPullRequestsByLatestFeedback";
+import { getLatestMentions, mentionKeyForPullRequest } from "../../hooks/utils/getLatestMentions";
 
 export const useOverView = () => {
   const headerQueryInfo = useHeader();
@@ -14,7 +16,7 @@ export const useOverView = () => {
   const data = useMemo(() => {
     if (
       !pullRequestesQueryInfo.data ||
-      !headerQueryInfo.data ||
+      !headerQueryInfo.data?.id || !headerQueryInfo.data?.login ||
       !repositoriesQueryInfo.data
     ) {
       return null;
@@ -24,6 +26,10 @@ export const useOverView = () => {
 
     const { flatPullRequests, reviewPerRepoPerPullNumber, actionsPerRepo } =
       pullRequestesQueryInfo.data;
+    const latestMentions = getLatestMentions(pullRequestesQueryInfo.data, {
+      id: headerQueryInfo.data.id,
+      login: headerQueryInfo.data.login,
+    });
 
     const { activeRepositories } = repositoriesQueryInfo.data || {};
 
@@ -34,71 +40,78 @@ export const useOverView = () => {
     const reviews = reviewPerRepoPerPullNumber;
     const actionsList = actionsPerRepo;
 
-    const pullRequeststData = activeFlatPullRequests
-      .filter((pr) => {
-        const prDate = dayjs(pr.created_at);
-        return prDate.isAfter(startOfWeek) || prDate.isSame(startOfWeek, "day");
-      })
-      .map((pr) => {
-        const repositoryName = pr.head.repo.name;
-        const pullNumber = pr.number;
+    const thisWeeksPullRequests = activeFlatPullRequests.filter((pr) => {
+      const prDate = dayjs(pr.created_at);
+      return prDate.isAfter(startOfWeek) || prDate.isSame(startOfWeek, "day");
+    });
 
-        const reviewsForThisPR = reviews?.[repositoryName]?.[pullNumber] || [];
-        const actionsForThisPr = (actionsList?.[repositoryName] || []).filter(
-          (run) => run.head_sha === pr.head.sha,
-        );
+    const { pullRequests: sortedPullRequests, latestFeedbackAtByPullRequest } = orderPullRequestsByLatestFeedback(
+      thisWeeksPullRequests,
+      pullRequestesQueryInfo.data,
+    );
 
-        const actionByName = actionsForThisPr.reduce(
-          (acc: Record<string, PullsActions[0][]>, action) => {
-            if (!action.name) return acc;
-            return {
-              ...acc,
-              [action.name]: [...(acc[action.name] || []), action],
-            };
-          },
-          {},
-        );
+    const pullRequeststData = sortedPullRequests.map((pr) => {
+      const repositoryName = pr.head.repo.name;
+      const pullNumber = pr.number;
 
-        const pendingReviews = (pr?.requested_reviewers || []).map(
-          (reviewer) => {
-            const key = reviewer?.login || reviewer?.id.toString();
-            return {
-              [key]: {
-                state: "NO_FEEDBACK",
-                userAvatar: reviewer.avatar_url,
-                userName: reviewer.login,
-                body: "",
-                date: "",
-              },
-            };
-          },
-        );
+      const reviewsForThisPR = reviews?.[repositoryName]?.[pullNumber] || [];
+      const actionsForThisPr = (actionsList?.[repositoryName] || []).filter(
+        (run) => run.head_sha === pr.head.sha,
+      );
 
-        const waitingReviews = pendingReviews.length;
+      const actionByName = actionsForThisPr.reduce(
+        (acc: Record<string, PullsActions[0][]>, action) => {
+          if (!action.name) return acc;
+          return {
+            ...acc,
+            [action.name]: [...(acc[action.name] || []), action],
+          };
+        },
+        {},
+      );
 
-        const reviewsGroupedbyUser = getReviewsGroupedByUser(reviewsForThisPR);
+      const pendingReviews = (pr?.requested_reviewers || []).map(
+        (reviewer) => {
+          const key = reviewer?.login || reviewer?.id.toString();
+          return {
+            [key]: {
+              state: "NO_FEEDBACK",
+              userAvatar: reviewer.avatar_url,
+              userName: reviewer.login,
+              body: "",
+              date: "",
+            },
+          };
+        },
+      );
 
-        const reviewsAndWaitingReviews = pendingReviews.reduce(
-          (acc, review) => ({ ...acc, ...review }),
-          reviewsGroupedbyUser,
-        );
+      const waitingReviews = pendingReviews.length;
 
-        const assignees = (pr.assignees || []).map((assignee) => ({
-          login: assignee.login,
-          name: assignee.name,
-          avatar: assignee.avatar_url,
-        }));
+      const reviewsGroupedbyUser = getReviewsGroupedByUser(reviewsForThisPR);
 
-        return {
-          pr,
-          actionByName,
-          reviewsAndWaitingReviews,
-          waitingReviews,
-          pullRequestUrl: pr.html_url,
-          labels: pr.labels,
-          assignees,
-        };
-      });
+      const reviewsAndWaitingReviews = pendingReviews.reduce(
+        (acc, review) => ({ ...acc, ...review }),
+        reviewsGroupedbyUser,
+      );
+
+      const assignees = (pr.assignees || []).map((assignee) => ({
+        login: assignee.login,
+        name: assignee.name,
+        avatar: assignee.avatar_url,
+      }));
+
+      return {
+        pr,
+        actionByName,
+        reviewsAndWaitingReviews,
+        waitingReviews,
+        pullRequestUrl: pr.html_url,
+        labels: pr.labels,
+        latestFeedbackAt: latestFeedbackAtByPullRequest.get(pr) || undefined,
+        latestMention: latestMentions.get(mentionKeyForPullRequest(pr)),
+        assignees,
+      };
+    });
 
     return pullRequeststData;
   }, [

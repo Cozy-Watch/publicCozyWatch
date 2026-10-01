@@ -10,7 +10,7 @@ const defaultData = {
 
 let localCache: RepositoriesCache | null = null;
 
-export const setLocalCache = (data: RepositoriesCache) => {
+export const setLocalCache = (data: RepositoriesCache | null) => {
   Logger.log("[Repositories] saving localCache");
   localCache = data;
 };

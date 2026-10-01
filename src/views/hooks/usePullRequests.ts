@@ -3,6 +3,7 @@ import { useUserQuery } from "../api/useUserQuery";
 import { usePullRequestQuery } from "../api/usePullRequestQuery";
 import { useRepositoriesQuery } from "../api/useRepositoriesQuery";
 import { getFullyApproved } from "./utils/getFullyApproved";
+import { getLatestMentions, mentionKeyForPullRequest } from "./utils/getLatestMentions";
 import {
   getRelevantTeamPullRequests,
   isMyPullRequest,
@@ -29,6 +30,7 @@ export const usePullRequest = () => {
     } = pullRequestesQueryInfo.data;
 
     const { activeRepositories } = repositoriesQueryInfo.data;
+    const latestMentions = getLatestMentions(pullRequestesQueryInfo.data, headerQueryInfo.data);
 
     const flatActiveRepositories = flatPullRequests.filter((pr) => {
       return activeRepositories[pr.base.repo.id];
@@ -43,6 +45,7 @@ export const usePullRequest = () => {
       pullRequests: flatActiveRepositories,
       reviews,
       user: headerQueryInfo.data,
+      mentionedPullRequests: latestMentions,
     });
 
     const waitingReview = myPullRequests.filter((pr) => {
@@ -66,15 +69,7 @@ export const usePullRequest = () => {
       });
 
     const mentionsInMyPr = myPullRequests.filter((pr) => {
-      const prMentions = Object.values(
-        mentionsList[pr.base.repo.name] || {}
-      ).flat();
-
-      const onlyMentions = prMentions.filter((mention) => {
-        return new RegExp(`@${headerQueryInfo.data.login}(?![a-zA-Z0-9_-])`, "i").test(mention.body ?? "");
-      });
-
-      return onlyMentions.some((mention) => +mention.pullNumber === pr.number);
+      return latestMentions.has(mentionKeyForPullRequest(pr));
     });
 
     const waitingMyReview = teamPullRequests.filter((pr) => {
@@ -100,15 +95,7 @@ export const usePullRequest = () => {
       });
 
     const mentionsInTeamsPr = teamPullRequests.filter((pr) => {
-      const prMentions = Object.values(
-        mentionsList[pr.base.repo.name] || {}
-      ).flat();
-
-      const onlyMentions = prMentions.filter((mention) => {
-        return new RegExp(`@${headerQueryInfo.data.login}(?![a-zA-Z0-9_-])`, "i").test(mention.body ?? "");
-      });
-
-      return onlyMentions.some((mention) => +mention.pullNumber === pr.number);
+      return latestMentions.has(mentionKeyForPullRequest(pr));
     });
 
     const teamFullyApproved = getFullyApproved({

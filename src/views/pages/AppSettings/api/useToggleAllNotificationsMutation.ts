@@ -12,21 +12,30 @@ export const useToggleAllNotificationsMutation = () => {
       );
     },
 
-    onSuccess: (data) => {
-      queryClient.setQueryData(
-        queryKey,
-        (oldData: NotificationSettingsPerKey | undefined) => {
-          if (!oldData) {
-            return oldData;
-          }
-
-          return data;
-        }
-      );
-
-      queryClient.invalidateQueries({
-        queryKey: queryKey,
-      });
+    onMutate: async (enable) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previousNotifications =
+        queryClient.getQueryData<NotificationSettingsPerKey>(queryKey);
+      if (previousNotifications) {
+        queryClient.setQueryData(
+          queryKey,
+          Object.fromEntries(
+            Object.entries(previousNotifications).map(([key, notification]) => [
+              key,
+              { ...notification, value: enable },
+            ]),
+          ) as NotificationSettingsPerKey,
+        );
+      }
+      return { previousNotifications };
+    },
+    onSuccess: (notifications) => {
+      queryClient.setQueryData(queryKey, notifications);
+    },
+    onError: (_error, _enable, context) => {
+      if (context?.previousNotifications) {
+        queryClient.setQueryData(queryKey, context.previousNotifications);
+      }
     },
   });
 };

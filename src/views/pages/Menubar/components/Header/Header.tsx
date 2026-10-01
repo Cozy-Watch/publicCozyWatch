@@ -1,6 +1,7 @@
-import { GearIcon, SyncIcon } from "@primer/octicons-react";
+import { BellIcon, GearIcon, SyncIcon } from "@primer/octicons-react";
 import { Avatar, Button, Flex } from "@radix-ui/themes";
 import { BuyLicenseButton } from "../../../../components/BuyLicenseButton/BuyLicenseButton";
+import { useNotifications } from "../../../../hooks/useNotifications";
 
 interface Props {
   avatarUrl?: string;
@@ -10,6 +11,9 @@ interface Props {
 }
 
 export const Header = ({ avatarUrl, login, name, isCompact }: Props) => {
+  const { data: notifications = [] } = useNotifications();
+  const unreadCount = notifications.filter((notification) => !notification.read).length;
+
   return (
     <Flex align="center" justify="between">
       <Flex align="center" gap="2">
@@ -41,6 +45,18 @@ export const Header = ({ avatarUrl, login, name, isCompact }: Props) => {
       </Flex>
 
       <Flex align="center" gap={isCompact ? "1" : "2"}>
+        <Button
+          variant="outline"
+          aria-label={unreadCount > 0 ? `Notification settings, ${unreadCount} unread` : "Notification settings"}
+          title="Notification settings"
+          style={{ boxShadow: "none", color: "var(--accent-12)" }}
+          onClick={() => {
+            window.electronAPI.application.navigateToRoute("settings");
+          }}
+        >
+          <BellIcon size={16} />
+          {unreadCount > 0 && <span>{unreadCount > 99 ? "99+" : unreadCount}</span>}
+        </Button>
         <Button
           variant="outline"
           style={{ boxShadow: "none", color: "var(--accent-12)" }}

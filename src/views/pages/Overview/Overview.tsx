@@ -8,7 +8,11 @@ import { useOverView } from "./useOverview";
 
 export const Overview = () => {
   return (
-    <Flex direction="column" overflow="auto">
+    <Flex
+      direction="column"
+      overflow="auto"
+      style={{ paddingLeft: "var(--space-6)", paddingRight: "var(--space-4)" }}
+    >
       <Flex
         top="0"
         position="sticky"
@@ -16,7 +20,8 @@ export const Overview = () => {
         gap="3"
         align="start"
         justify="center"
-        p="4"
+        pt="4"
+        pb="4"
         style={{
           borderRadius: "8px",
           backdropFilter: "blur(9px)",
@@ -26,7 +31,7 @@ export const Overview = () => {
       >
         <Flex style={{ color: "var(--accent-12)" }} align="center" gap="3">
           <RocketIcon size={16} />
-          <Text weight="bold">Your Overview</Text>
+          <Text weight="bold">Overview</Text>
         </Flex>
 
         <Stats />
@@ -43,7 +48,7 @@ const OverviewContent = () => {
 
   if (isFetching && !data) {
     return (
-      <Flex direction="column" gap="6" p="4">
+      <Flex direction="column" gap="6" pt="4" pb="4">
         <Flex style={{ color: "var(--accent-12)" }} align="center" gap="3">
           <CalendarIcon size={16} />
           <Text weight="bold">Today</Text>
@@ -65,7 +70,7 @@ const OverviewContent = () => {
   }
 
   return (
-    <Flex direction="column" gap="6" p="4">
+    <Flex direction="column" gap="6" pt="4" pb="4">
       <Flex style={{ color: "var(--accent-12)" }} align="center" gap="3">
         <CalendarIcon size={16} />
         <Text weight="bold">Today ({data.length})</Text>
@@ -81,10 +86,13 @@ const OverviewContent = () => {
             waitingReviews,
             labels,
             assignees,
+            latestFeedbackAt,
+            latestMention,
           }) => {
             return (
               <Box width="100%" key={pr.id}>
                 <PullRequestCard
+                  pullRequest={pr}
                   waitingReviews={waitingReviews}
                   reviewsGroupedbyUser={reviewsAndWaitingReviews}
                   avatarUrl={pr?.user?.avatar_url}
@@ -95,6 +103,8 @@ const OverviewContent = () => {
                   branchName={pr.head.ref}
                   repositoryName={pr.head.repo.name}
                   updatedAt={pr.updated_at}
+                  latestFeedbackAt={latestFeedbackAt}
+                  latestMention={latestMention}
                   actionsByName={actionByName}
                   pullRequestLink={pullRequestUrl}
                   labels={labels}
@@ -102,7 +112,7 @@ const OverviewContent = () => {
                 />
               </Box>
             );
-          }
+          },
         )}
       </Flex>
     </Flex>

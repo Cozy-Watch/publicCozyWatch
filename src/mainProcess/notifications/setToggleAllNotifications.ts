@@ -20,8 +20,12 @@ export const setToggleAllNotifications = async (enable: boolean) => {
     };
   }, {} as NotificationSettingsPerKey);
 
-  await storeData({
+  const saved = await storeData({
     name: "notifications",
     data: updatedNotifications,
   });
+  if (!saved) {
+    throw new Error("Unable to save notification settings.");
+  }
+  return updatedNotifications;
 };

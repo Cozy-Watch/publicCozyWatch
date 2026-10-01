@@ -1,120 +1,143 @@
 import log from "electron-log";
 import { performanceDiagnostics } from "../diagnostics/diagnostics";
-
 import { getPullRequests } from "../api/PullRequests/getPullRequests";
+import { sweepReviewDelta } from "../api/PullRequests/queries/reviewDelta";
+import { refreshCoordinator } from "./refreshCoordinator";
 
-let pollTimeout: NodeJS.Timeout | null = null;
-const POLLING_INTERVAL = 1000 * 60 * 5; // 5 minutes
-const REFRESH_COOLDOWN = 10000; // 10 seconds minimum between refreshes
-let lastRefreshTime = 0;
+const FULL_INTERVAL = 300_000;
+const SWEEP_INTERVAL = 60_000;
+const REFRESH_COOLDOWN = 10_000;
 
-type PollError = {
-  status?: number;
-  message?: string;
-  response?: {
-    headers?: Record<string, string | undefined>;
+export class RefreshScheduler {
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private running = false;
+  private generation = 0;
+  private busy = false;
+  private nextFull = 0;
+  private nextSweep = 0;
+  private pausedUntil = 0;
+  private lastManual = -Infinity;
+  private manualPending = false;
+
+  constructor(
+    private readonly jobs: {
+      full: () => Promise<unknown>;
+      sweep: () => Promise<unknown>;
+      invalidate: () => void;
+    },
+  ) {}
+
+  start = () => {
+    if (this.running) return;
+    this.running = true;
+    this.generation++;
+    this.nextFull = Date.now();
+    this.nextSweep = Date.now();
+    this.pausedUntil = 0;
+    this.lastManual = -Infinity;
+    this.arm();
   };
-};
 
-const getPollErrorDetails = (error: unknown): PollError => {
-  if (typeof error !== "object" || error === null) {
-    return {};
+  stop = () => {
+    this.running = false;
+    this.generation++;
+    this.manualPending = false;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+    this.jobs.invalidate();
+  };
+
+  refresh = () => {
+    if (!this.running || Date.now() - this.lastManual < REFRESH_COOLDOWN)
+      return;
+    this.lastManual = Date.now();
+    this.manualPending = true;
+    if (!this.busy) this.arm();
+  };
+
+  private arm() {
+    if (!this.running || this.busy) return;
+    if (this.timer) clearTimeout(this.timer);
+    const due = this.manualPending
+      ? Date.now()
+      : Math.min(this.nextFull, this.nextSweep);
+    this.timer = setTimeout(
+      () => {
+        void this.tick();
+      },
+      Math.max(0, Math.max(due, this.pausedUntil) - Date.now()),
+    );
   }
 
-  return error as PollError;
-};
-
-const poll = async () => {
-  const diagnosticsEnabled = performanceDiagnostics.isEnabled();
-  const startedAt = diagnosticsEnabled ? performance.now() : 0;
-  try {
-    await getPullRequests();
-    if (diagnosticsEnabled) {
-      performanceDiagnostics.record("github-poll-completed", {
-        durationMs: performance.now() - startedAt,
-      });
-    }
-    scheduleNextPoll(POLLING_INTERVAL);
-  } catch (error: unknown) {
-    if (diagnosticsEnabled) {
+  private async tick() {
+    this.timer = undefined;
+    if (!this.running || this.busy) return;
+    const generation = this.generation;
+    const started = Date.now();
+    const full = this.manualPending || started >= this.nextFull;
+    this.manualPending = false;
+    // Advance from the start, rather than adding refresh duration to the cadence.
+    if (full) this.nextFull = started + FULL_INTERVAL;
+    this.nextSweep = started + SWEEP_INTERVAL;
+    this.busy = true;
+    try {
+      await (full ? this.jobs.full() : this.jobs.sweep());
+      performanceDiagnostics.record(
+        full ? "github-poll-completed" : "review-sweep-tick",
+        { durationMs: Date.now() - started },
+      );
+    } catch (error) {
+      if (generation !== this.generation) return;
+      const err = error as {
+        status?: number;
+        message?: string;
+        response?: { headers?: Record<string, string> };
+      };
       performanceDiagnostics.record("github-poll-failed", {
-        durationMs: performance.now() - startedAt,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unknown GitHub polling error",
+        status: err.status || 0,
+        full,
+        durationMs: Date.now() - started,
       });
-    }
-    const err = getPollErrorDetails(error);
-    if (
-      err.status === 401 ||
-      (err.message && err.message.includes("Bad credentials"))
-    ) {
-      // Token is invalid — stop polling; signOut is handled by the Octokit error hook
-      log.error("[Polling] Bad credentials (401), stopping poll", {
-        error: err,
-      });
-      stopPolling();
-    } else if (
-      err.status === 403 &&
-      err.response?.headers?.["x-ratelimit-remaining"] === "0"
-    ) {
-      const reset = err.response?.headers?.["x-ratelimit-reset"];
-      const delay = reset
-        ? +reset * 1000 - Date.now() + 1000
-        : POLLING_INTERVAL;
-
-      log.warn("[Polling] Rate limited, delaying next poll", {
-        delaySec: delay / 1000,
-      });
-
-      scheduleNextPoll(delay);
-    } else {
-      log.error("[Polling Error]", { error: err });
-      scheduleNextPoll(POLLING_INTERVAL);
+      if (
+        err.status === 401 ||
+        /Bad credentials|Authentication failed/.test(err.message || "")
+      ) {
+        this.stop();
+      } else {
+        const headers = err.response?.headers || {};
+        const retryAfter = Number(headers["retry-after"]);
+        const reset = Number(headers["x-ratelimit-reset"]) * 1000;
+        if (retryAfter > 0) this.pausedUntil = Date.now() + retryAfter * 1000;
+        else if (headers["x-ratelimit-remaining"] === "0" && reset > Date.now())
+          this.pausedUntil = reset + 1000;
+        else if (err.status === 403 || err.status === 429)
+          this.pausedUntil = Date.now() + FULL_INTERVAL;
+        log.warn("[Polling] Refresh failed", { status: err.status || 0 });
+      }
+    } finally {
+      this.busy = false;
+      // No catch-up storm after a slow request, sleep, or a new login session.
+      if (generation === this.generation) {
+        const now = Date.now();
+        // An overlong full refresh must leave room for lightweight sweeps,
+        // rather than immediately starting another full refresh forever.
+        if (full && this.nextFull <= now) this.nextFull = now + FULL_INTERVAL;
+        if (this.nextSweep <= now)
+          this.nextSweep +=
+            (Math.floor((now - this.nextSweep) / SWEEP_INTERVAL) + 1) *
+            SWEEP_INTERVAL;
+      }
+      this.arm();
     }
   }
-};
-
-function scheduleNextPoll(delay: number) {
-  log.info("[Polling]-scheduleNextPoll");
-  if (pollTimeout) {
-    log.info("[Polling]-scheduleNextPoll pollTimeout cleared");
-    clearTimeout(pollTimeout);
-  }
-
-  log.info("[Polling]-scheduleNextPoll setting new timeout");
-  pollTimeout = setTimeout(poll, delay);
 }
 
-export const startPolling = () => {
-  log.info("[Polling]-startPolling Starting");
-  if (pollTimeout) {
-    log.info("[Polling]-startPolling Starting aborted, already started");
-    return;
-  }
-  log.info("[Polling]-startPolling Started");
-  poll();
-};
+const scheduler = new RefreshScheduler({
+  full: getPullRequests,
+  sweep: sweepReviewDelta,
+  invalidate: () => refreshCoordinator.invalidate(),
+});
 
-export const stopPolling = () => {
-  if (pollTimeout) {
-    clearTimeout(pollTimeout);
-    log.info("[Polling]-stopPolling Stopped Timer");
-  }
-  log.info("[Polling]-stopPolling pollTimeout reset to null");
-  pollTimeout = null;
-};
-
-export const refreshPoll = () => {
-  if (Date.now() - lastRefreshTime < REFRESH_COOLDOWN) {
-    log.info("[Polling]-refresh Cooldown active, skipping");
-    return;
-  }
-  if (pollTimeout) {
-    clearTimeout(pollTimeout);
-    log.info("[Polling]-refresh Triggered manual refresh");
-    lastRefreshTime = Date.now();
-    poll();
-  }
-};
+export const startPolling = scheduler.start;
+export const stopPolling = scheduler.stop;
+export const refreshPoll = scheduler.refresh;

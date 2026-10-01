@@ -1,12 +1,12 @@
 import ReactDOM from "react-dom/client";
 import { Router } from "./views/Router";
-import log from "electron-log/renderer";
 import "./index.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const start =
   (window as Window & { __APP_START?: number }).__APP_START ??
   performance.now();
+(window as Window & { __APP_START?: number }).__APP_START = start;
 
 const root = ReactDOM.createRoot(document.getElementById("app") as HTMLElement);
 
@@ -17,17 +17,3 @@ root.render(
     <Router />
   </QueryClientProvider>
 );
-
-// log after first paint
-requestAnimationFrame(() => {
-  log.info(
-    "[Startup] React rendered in",
-    (performance.now() - start).toFixed(0),
-    "ms"
-  );
-  requestAnimationFrame(() => {
-    void window.electronAPI.application.reportRendererReady().catch((error) => {
-      log.warn("[Startup] Failed to report renderer readiness", { error });
-    });
-  });
-});

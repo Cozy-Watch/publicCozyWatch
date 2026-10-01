@@ -8,23 +8,32 @@ import {
   createRouter,
   redirect,
 } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { StrictMode, useEffect } from "react";
 import { Appearance } from "../state/appState";
+import {
+  DEFAULT_ACCENT_COLOR,
+  isAccentColor,
+} from "../shared/theme";
 import { useIsAuthenticatedQuery } from "./api/useIsAuthenticatedQuery";
 import { AuthContext } from "./context/Auth/Context";
 import { useAppearanceMutation } from "./pages/AppSettings/api/useAppearanceMutation";
 import { useAppearanceQuery } from "./pages/AppSettings/api/useAppearanceQuery";
+import {
+  accentColorQueryKey,
+  useAccentColorQuery,
+} from "./pages/AppSettings/api/useAccentColorQuery";
 import { GithubAuthentication } from "./pages/GithubAuthentication/GithubAuthentication";
-import { Mentions } from "./pages/Mentions/Mentions";
+import { MentionsPage } from "./pages/Mentions/MentionsPage";
 import { Menubar } from "./pages/Menubar/Menubar";
 import { Overview } from "./pages/Overview/Overview";
-import { PendingReviews } from "./pages/PendingReviews/PendingReviews";
 import { PullRequests } from "./pages/PullRequests/PullRequests";
+import { PullRequestScopePage } from "./pages/PullRequestScope/PullRequestScopePage";
 import { Repositories } from "./pages/Repositories/Repositories";
-import { Reviewed } from "./pages/Reviewed/Reviewed";
 import { Root } from "./pages/Root/Root";
 import { Settings } from "./pages/Settings/Settings";
-import { FullyApproved } from "./pages/FullyApproved/FullyApproved";
+import { Notifications } from "./pages/Notifications/Notifications";
+import log from "electron-log/renderer";
 
 const LoadingComponent = () => {
   return (
@@ -86,49 +95,73 @@ const overview = createRoute({
 const pendingReviewsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "myPullRequests/pendingReviews",
-  component: PendingReviews,
+  component: () => <PullRequestScopePage scope="my" filter="pendingReviews" />,
 });
 
 const reviewedRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "myPullRequests/reviewed",
-  component: Reviewed,
+  component: () => <PullRequestScopePage scope="my" filter="reviewed" />,
 });
 
 const mentionsInMyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "myPullRequests/mentions",
-  component: Mentions,
+  beforeLoad: () => {
+    throw redirect({ to: "/mentions" });
+  },
+  component: MentionsPage,
 });
 
 const fullyApprovedInMyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "myPullRequests/fullyApproved",
-  component: FullyApproved,
+  component: () => <PullRequestScopePage scope="my" filter="fullyApproved" />,
 });
 
 const pendingMyReviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "teamPullRequest/pendingReviews",
-  component: PendingReviews,
+  component: () => <PullRequestScopePage scope="relevant" filter="pendingReviews" />,
 });
 
 const reviewsByMeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "teamPullRequest/reviewed",
-  component: Reviewed,
+  component: () => <PullRequestScopePage scope="relevant" filter="reviewed" />,
 });
 
 const mentionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "teamPullRequest/mentions",
-  component: Mentions,
+  beforeLoad: () => {
+    throw redirect({ to: "/mentions" });
+  },
+  component: MentionsPage,
 });
 
 const teamFullyApprovedInMyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "teamPullRequest/fullyApproved",
-  component: FullyApproved,
+  component: () => <PullRequestScopePage scope="relevant" filter="fullyApproved" />,
+});
+
+const myPullRequestsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/myPullRequests",
+  component: () => <PullRequestScopePage scope="my" filter="all" />,
+});
+
+const relevantPullRequestsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/teamPullRequest",
+  component: () => <PullRequestScopePage scope="relevant" filter="all" />,
+});
+
+const mentionsPullRequestsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/mentions",
+  component: MentionsPage,
 });
 
 const pullRequestRoute = createRoute({
@@ -149,6 +182,12 @@ const settingsRoute = createRoute({
   component: Settings,
 });
 
+const notificationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/notifications",
+  component: Notifications,
+});
+
 const menubarRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/menubar",
@@ -158,8 +197,12 @@ const menubarRoute = createRoute({
 // --- Router Setup ---
 const routeTree = rootRoute.addChildren([
   settingsRoute,
+  notificationsRoute,
   githubAuthenticationRoute,
   pullRequestRoute,
+  myPullRequestsRoute,
+  relevantPullRequestsRoute,
+  mentionsPullRequestsRoute,
   repositoriesRoute,
   menubarRoute,
   overview,
@@ -192,7 +235,9 @@ export const Router = () => {
 };
 const RouterContent = ({ isAuthenticated }: { isAuthenticated: boolean }) => {
   const { data: stateAppearance } = useAppearanceQuery();
+  const { data: stateAccentColor } = useAccentColorQuery();
   const { mutateAsync: saveAppearance } = useAppearanceMutation();
+  const queryClient = useQueryClient();
 
   const appearance =
     stateAppearance ??
@@ -210,9 +255,34 @@ const RouterContent = ({ isAuthenticated }: { isAuthenticated: boolean }) => {
   }, [saveAppearance]);
 
   useEffect(() => {
-    const handleNavigateToSettings = (route: "settings" | "signIn") => {
+    const handler = window.electronAPI.application.onApplicationAccentColorUpdate(
+      (accentColor) => {
+        if (isAccentColor(accentColor)) {
+          queryClient.setQueryData(accentColorQueryKey, accentColor);
+        }
+      },
+    );
+
+    return () => {
+      window.electronAPI.application.removeOnApplicationAccentColorUpdate(
+        handler,
+      );
+    };
+  }, [queryClient]);
+
+  useEffect(() => {
+    const handleNavigateToSettings = (event: {
+      route: "settings" | "signIn" | "notifications";
+      notificationId?: string;
+    }) => {
+      const { route, notificationId } = event;
       if (route === "signIn") {
         router.navigate({ to: "/" });
+      } else if (route === "notifications") {
+        router.navigate({
+          to: "/notifications",
+          search: notificationId ? { notificationId } : {},
+        });
       } else {
         router.navigate({ to: "/settings" });
       }
@@ -222,6 +292,18 @@ const RouterContent = ({ isAuthenticated }: { isAuthenticated: boolean }) => {
       handleNavigateToSettings
     );
 
+    const startupTime =
+      (window as Window & { __APP_START?: number }).__APP_START ??
+      performance.now();
+    log.info(
+      "[Startup] React rendered in",
+      (performance.now() - startupTime).toFixed(0),
+      "ms",
+    );
+    void window.electronAPI.application.reportRendererReady().catch((error) => {
+      log.warn("[Startup] Failed to report renderer readiness", { error });
+    });
+
     return () => {
       window.electronAPI.application.removeOnNavigateToRoute(handler);
     };
@@ -230,8 +312,8 @@ const RouterContent = ({ isAuthenticated }: { isAuthenticated: boolean }) => {
   return (
     <StrictMode>
       <Theme
-        accentColor="violet"
-        radius="large"
+        accentColor={stateAccentColor ?? DEFAULT_ACCENT_COLOR}
+        radius={stateAccentColor === "gray" ? "small" : "large"}
         appearance={appearance}
         style={{ background: "none" }}
       >

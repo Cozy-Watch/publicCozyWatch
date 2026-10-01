@@ -82,11 +82,8 @@ export const createMenu = () => {
                       {
                         title: "CI 'US-EAST-1' Status Update",
                         body: "DNS Automation status changed from success to failure.",
-                        onClick: () => {
-                          tryOpenExternalUrl(
-                            "https://github.com/test/repo/issues/1"
-                          ); // Use a valid test URL
-                        },
+                        type: "ci" as const,
+                        url: "https://github.com/test/repo/issues/1",
                       },
                     ];
 

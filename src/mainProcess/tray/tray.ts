@@ -2,6 +2,7 @@ import { Menu, nativeImage, Tray } from "electron";
 import path from "node:path";
 import { createWindow, getMainWindow } from "../../main";
 import { getCachedData as getPullRequestsCache } from "../api/PullRequests/utils/getDefaultData";
+import { dedupePullRequests } from "../api/PullRequests/utils/dedupePullRequests";
 import { getCachedData as getRepositoriesCache } from "../api/Repositories/utils/getDefaultData";
 import { getUser } from "../api/User/getUser";
 import { tryOpenExternalUrl } from "../security/externalUrl";
@@ -61,31 +62,23 @@ const getIcon = (listOfStatus: ListOfStatus[]): Electron.NativeImage => {
   const key = [...listOfStatus].sort().join(",");
   if (iconCache.has(key)) return iconCache.get(key)!;
 
-  const mapIcon = {
-    APPROVED: "approved.png",
-    CHANGES_REQUESTED: "changes.png",
-    COMMENTED: "commented.png",
-    DISMISSED: "commented.png",
+  const statusStyles: Record<ListOfStatus, { color: string; symbol: string }> = {
+    APPROVED: { color: "#2da44e", symbol: "✓" },
+    CHANGES_REQUESTED: { color: "#cf222e", symbol: "!" },
+    COMMENTED: { color: "#8250df", symbol: "…" },
+    DISMISSED: { color: "#8250df", symbol: "…" },
   };
 
-  const getIconPaths = (status: ListOfStatus) => {
-    const base = mapIcon[status];
-    return {
-      "1x": path.join(__dirname, "images", base),
-      "2x": path.join(__dirname, "images", base.replace(".png", "@2x.png")),
-    };
+  const createStatusIcon = (status: ListOfStatus) => {
+    const { color, symbol } = statusStyles[status];
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="${color}"/><text x="16" y="22" text-anchor="middle" font-family="sans-serif" font-size="20" font-weight="700" fill="#fff">${symbol}</text></svg>`;
+    return nativeImage.createFromDataURL(
+      `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+    );
   };
 
-  const icons1x = listOfStatus
-    .map((status: ListOfStatus) =>
-      nativeImage.createFromPath(getIconPaths(status)["1x"])
-    )
-    .filter((icon) => !icon.isEmpty());
-  const icons2x = listOfStatus
-    .map((status: ListOfStatus) =>
-      nativeImage.createFromPath(getIconPaths(status)["2x"])
-    )
-    .filter((icon) => !icon.isEmpty());
+  const icons1x = listOfStatus.map(createStatusIcon);
+  const icons2x = listOfStatus.map(createStatusIcon);
 
   if (icons1x.length === 0) {
     const empty = nativeImage.createEmpty();
@@ -253,10 +246,9 @@ export const updateTrayMenu = async () => {
     (acc, { name: repoName }) => {
       const reviews = reviewPerRepoPerPullNumber[repoName];
 
-      const pullRequestInfoList = Object.values(
-        pullRequestsPerRepo[repoName] || {}
+      const pullRequestInfoList = dedupePullRequests(
+        Object.values(pullRequestsPerRepo[repoName] || {}).flat(),
       )
-        .flat()
         .filter(
           (pr) =>
             pr?.user?.id === userId ||

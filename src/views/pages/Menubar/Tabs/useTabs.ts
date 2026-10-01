@@ -4,15 +4,21 @@ import {
   PullsActions,
 } from "src/mainProcess/api/PullRequests/utils/getDefaultData";
 import { usePullRequestQuery } from "../../../api/usePullRequestQuery";
+import { useUserQuery } from "../../../api/useUserQuery";
 import { getReviewsGroupedByUser } from "../../../hooks/utils/getReviewsGroupedByUser";
+import { orderPullRequestsByLatestFeedback } from "../../../hooks/utils/sortPullRequestsByLatestFeedback";
+import { getLatestMentions, mentionKeyForPullRequest } from "../../../hooks/utils/getLatestMentions";
 
 export const useTabs = (pullRequests: PullRequestList) => {
   const pullRequestesQueryInfo = usePullRequestQuery();
+  const userQuery = useUserQuery();
 
   const data = useMemo(() => {
-    if (!pullRequestesQueryInfo.data) {
+    if (!pullRequestesQueryInfo.data || !userQuery.data) {
       return null;
     }
+
+    const latestMentions = getLatestMentions(pullRequestesQueryInfo.data, userQuery.data);
 
     const { reviewPerRepoPerPullNumber, actionsPerRepo } =
       pullRequestesQueryInfo.data;
@@ -20,7 +26,12 @@ export const useTabs = (pullRequests: PullRequestList) => {
     const reviews = reviewPerRepoPerPullNumber;
     const actionsList = actionsPerRepo;
 
-    const pullRequeststData = pullRequests.map((pr) => {
+    const { pullRequests: sortedPullRequests, latestFeedbackAtByPullRequest } = orderPullRequestsByLatestFeedback(
+      pullRequests,
+      pullRequestesQueryInfo.data,
+    );
+
+    const pullRequeststData = sortedPullRequests.map((pr) => {
       const repositoryName = pr.head.repo.name;
       const pullNumber = pr.number;
 
@@ -47,6 +58,8 @@ export const useTabs = (pullRequests: PullRequestList) => {
             state: "NO_FEEDBACK",
             userAvatar: reviewer.avatar_url,
             userName: reviewer.login,
+            body: "",
+            date: "",
           },
         };
       });
@@ -73,14 +86,18 @@ export const useTabs = (pullRequests: PullRequestList) => {
         waitingReviews,
         pullRequestUrl: pr.html_url,
         assignees,
+        latestFeedbackAt: latestFeedbackAtByPullRequest.get(pr) || undefined,
+        latestMention: latestMentions.get(mentionKeyForPullRequest(pr)),
       };
     });
 
     return pullRequeststData;
-  }, [pullRequestesQueryInfo.data, pullRequests]);
+  }, [pullRequestesQueryInfo.data, pullRequests, userQuery.data]);
 
   return {
     ...pullRequestesQueryInfo,
+    error: pullRequestesQueryInfo.error ?? userQuery.error,
+    isFetching: pullRequestesQueryInfo.isFetching || userQuery.isFetching,
     data,
   };
 };

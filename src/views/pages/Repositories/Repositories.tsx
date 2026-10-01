@@ -21,7 +21,13 @@ export const Repositories = () => {
 
   if (isPending) {
     return (
-      <Flex flexGrow="1" justify="center" align="center" minHeight={"90dvh"}>
+      <Flex
+        flexGrow="1"
+        height="100%"
+        minHeight="0"
+        justify="center"
+        align="center"
+      >
         <img
           id="sofa"
           src="./images/catSitting.png"
@@ -114,7 +120,7 @@ const RepositoriesContent = ({
         >
           <Flex justify="between" align="center">
             <Flex gap="3" direction="column">
-              <Text size="2">
+              <Text size="2" className="settings-card-description">
                 Manage repositories you want to monitor for pull requests.
               </Text>
 
@@ -122,6 +128,7 @@ const RepositoriesContent = ({
 
             <Flex justify={"end"} mt="2" mb="2" width="175px">
               <TextField.Root
+                className="settings-search"
                 placeholder="Search repository"
                 value={textFilter}
                 onChange={({ target: { value } }) => {
@@ -145,7 +152,7 @@ const RepositoriesContent = ({
             </Flex>
           </Flex>
 
-          <Flex justify="between" align="center" pb="4">
+          <Flex justify="between" align="center" pb="4" mb="2">
             <Flex gap="2" align="center" px="4">
               <Flex pl="3">
                 <Checkbox
@@ -165,16 +172,17 @@ const RepositoriesContent = ({
                 />
               </Flex>
 
-              <Text size="2">
+              <Text size="2" className="settings-control-label">
                 {isAllActive ? "Deactivate" : "Activate"} All
               </Text>
 
-              <Text size="2" weight="light">
+              <Text size="2" className="settings-card-description">
                 ({activeRepositoriesCount} of {repositories.length})
               </Text>
             </Flex>
 
             <Button
+              className="settings-action"
               style={{ width: "175px" }}
               loading={isPending}
               onClick={() => {

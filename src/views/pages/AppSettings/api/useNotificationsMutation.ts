@@ -15,28 +15,26 @@ export const useNotificationsMutation = () => {
         key,
       });
     },
-    onSuccess: (data, variables) => {
-      queryClient.setQueryData(
-        queryKey,
-        (oldData: NotificationSettingsPerKey | undefined) => {
-          if (!oldData) {
-            return oldData;
-          }
-
-          const notificationKey = variables.key as NotificationKey;
-          return {
-            ...oldData,
-            [notificationKey]: {
-              ...oldData[notificationKey],
-              value: variables.checked,
-            },
-          };
-        }
-      );
-
-      queryClient.invalidateQueries({
-        queryKey: queryKey,
-      });
+    onMutate: async ({ checked, key }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previousNotifications =
+        queryClient.getQueryData<NotificationSettingsPerKey>(queryKey);
+      const notificationKey = key as NotificationKey;
+      if (previousNotifications?.[notificationKey]) {
+        queryClient.setQueryData(queryKey, {
+          ...previousNotifications,
+          [notificationKey]: {
+            ...previousNotifications[notificationKey],
+            value: checked,
+          },
+        });
+      }
+      return { previousNotifications };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousNotifications) {
+        queryClient.setQueryData(queryKey, context.previousNotifications);
+      }
     },
   });
 };

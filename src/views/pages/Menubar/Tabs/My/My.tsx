@@ -1,22 +1,8 @@
-import {
-  Avatar,
-  Box,
-  Card,
-  Flex,
-  Spinner,
-  Switch,
-  Text,
-  Tooltip,
-} from "@radix-ui/themes";
+import { Flex, Spinner, Switch, Text } from "@radix-ui/themes";
 
 import { useState } from "react";
 import { PullRequestList } from "src/mainProcess/api/PullRequests/utils/getDefaultData";
-import { BranchTitle } from "../../../../components/PullRequestsCard/components/BranchTitle/BranchTitle";
-import { CIActions } from "../../../../components/PullRequestsCard/components/CIActions/CIActions";
-import { LastUpdate } from "../../../../components/PullRequestsCard/components/LastUpdate/LastUpdate";
-import { MergeInfo } from "../../../../components/PullRequestsCard/components/MergeInfo/MergeInfo";
-import { Repository } from "../../../../components/PullRequestsCard/components/Repository/Repository";
-import { Review } from "../../../../components/Review/Review";
+import { PullRequestCard } from "../../../../components/PullRequestsCard/PullRequestsCard";
 import { useTabs } from "../useTabs";
 import { Empty } from "../../components/Empty/Empty";
 
@@ -58,12 +44,12 @@ export const My = ({ pullRequests, isCompact }: Props) => {
 
   return (
     <Flex
-      gap="4"
+      gap="2"
       direction="column"
       width="100%"
-      height="100%"
+      minHeight="100%"
       px={isCompact ? "2" : "3"}
-      pb={isCompact ? "2" : "3"}
+      pb={isCompact ? "4" : "5"}
       pt={isCompact ? "2" : "3"}
     >
       <Flex align="center" gap="2" py="4" mt="-4" mb="-4">
@@ -89,159 +75,29 @@ export const My = ({ pullRequests, isCompact }: Props) => {
         </Empty>
       )}
 
-      {myPullRequestsCount.map(
-        ({
-          pr,
-          reviewsAndWaitingReviews,
-          actionByName,
-          pullRequestUrl,
-          waitingReviews,
-          assignees,
-        }) => {
-          if (isCompact) {
-            return (
-              <Box width="100%" key={pr.id}>
-                <Flex
-                  justify="between"
-                  className="mb-card-bg"
-                  style={{
-                    borderRadius: "var(--radius-2)",
-                  }}
-                  p="2"
-                  width="100%"
-                  direction="column"
-                  gap="3"
-                >
-                  <Repository repositoryName={pr.head.repo.name} isCompact />
-
-                  <BranchTitle
-                    title={pr.title}
-                    htmlUrl={pr.html_url}
-                    isCompact
-                  />
-
-                  <MergeInfo
-                    baseBranchName={pr.base.ref}
-                    branchName={pr.head.ref}
-                    isCompact
-                  />
-
-                  <Flex align="center" justify="between">
-                    <Flex gap="3" align="center">
-                      <Review
-                        isCompact
-                        reviewsGroupedbyUser={reviewsAndWaitingReviews}
-                        waitingReviews={waitingReviews}
-                      />
-
-                      <CIActions
-                        actionsByName={actionByName}
-                        pullRequestLink={pullRequestUrl}
-                        isCompact
-                      />
-                    </Flex>
-
-                    <LastUpdate updatedAt={pr.updated_at} isCompact />
-                  </Flex>
-                </Flex>
-              </Box>
-            );
-          }
-
-          return (
-            <Box width="100%" key={pr.id}>
-              <Card className="shadow-medium">
-                <Flex direction="column" gap="4" flexGrow="1">
-                  <Review
-                    reviewsGroupedbyUser={reviewsAndWaitingReviews}
-                    waitingReviews={waitingReviews}
-                  />
-
-                  <Flex gap="3" width="100%" flexGrow="1">
-                    <Flex gap="1">
-                      <Tooltip
-                        content={`Assigned to: ${pr?.user?.login || "N/A"}, ${assignees
-                          .map(({ login, name }) => login || name)
-                          .join(", ")}`}
-                      >
-                        <Flex>
-                          <Avatar
-                            src={pr?.user?.avatar_url}
-                            fallback={pr?.user?.login || "N/A"}
-                            size="1"
-                            color="amber"
-                            radius="full"
-                            className="accent-shadow-low"
-                          />
-
-                          {assignees.map(({ login, name, avatar }) => {
-                            if (avatar === pr?.user?.avatar_url) {
-                              return null;
-                            }
-
-                            return (
-                              <Avatar
-                                key={login || name}
-                                src={avatar}
-                                fallback={login || name || "N/A"}
-                                size="1"
-                                color="amber"
-                                radius="full"
-                                ml="-4"
-                                className="accent-shadow-low"
-                              />
-                            );
-                          })}
-                        </Flex>
-                      </Tooltip>
-                    </Flex>
-
-                    <Flex
-                      direction="column"
-                      gap="2"
-                      width="100%"
-                      maxWidth="100%"
-                      overflow="auto"
-                    >
-                      <BranchTitle title={pr.title} htmlUrl={pr.html_url} />
-
-                      <Flex gap="1" justify="between" align="center">
-                        <Repository repositoryName={pr.head.repo.name} />
-                      </Flex>
-
-                      <Flex
-                        gap="1"
-                        justify="between"
-                        align="center"
-                        maxWidth="100%"
-                      >
-                        <MergeInfo
-                          baseBranchName={pr.base.ref}
-                          branchName={pr.head.ref}
-                        />
-                      </Flex>
-
-                      <Flex
-                        align="center"
-                        justify="between"
-                        direction="row-reverse"
-                        gap="1"
-                      >
-                        <LastUpdate updatedAt={pr.updated_at} />
-
-                        <CIActions
-                          actionsByName={actionByName}
-                          pullRequestLink={pullRequestUrl}
-                        />
-                      </Flex>
-                    </Flex>
-                  </Flex>
-                </Flex>
-              </Card>
-            </Box>
-          );
-        },
-      )}
+      {myPullRequestsCount.map(({ pr, reviewsAndWaitingReviews, actionByName, pullRequestUrl, waitingReviews, assignees, latestFeedbackAt, latestMention }) => (
+        <PullRequestCard
+          key={pr.id}
+          isCompact={isCompact}
+          pullRequest={pr}
+          waitingReviews={waitingReviews}
+          reviewsGroupedbyUser={reviewsAndWaitingReviews}
+          avatarUrl={pr.user?.avatar_url}
+          login={pr.user?.login}
+          title={pr.title}
+          htmlUrl={pr.html_url}
+          baseBranchName={pr.base.ref}
+          branchName={pr.head.ref}
+          repositoryName={pr.head.repo?.name ?? pr.base.repo.name}
+          updatedAt={pr.updated_at}
+          latestFeedbackAt={latestFeedbackAt}
+          latestMention={latestMention}
+          actionsByName={actionByName}
+          pullRequestLink={pullRequestUrl}
+          labels={pr.labels}
+          assignees={assignees}
+        />
+      ))}
     </Flex>
   );
 };

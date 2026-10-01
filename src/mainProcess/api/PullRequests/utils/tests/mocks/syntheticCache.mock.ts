@@ -54,6 +54,7 @@ export const createEmptyCache = (): CacheData => ({
   reviewUpdateList: { newReview: [], reviewChanged: [] },
   CIStatusUpdatePerRepo: {},
   mentions: {},
+  reviewCommentsPerRepo: {},
   flatPullRequests: [],
 });
 
