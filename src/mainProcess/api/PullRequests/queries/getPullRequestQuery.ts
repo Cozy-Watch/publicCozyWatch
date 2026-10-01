@@ -12,6 +12,7 @@ import { registerPullActions } from "../hooks/registerPullActions";
 import { registerPullList } from "../hooks/registerPullList";
 import { getAddedRemovedPRId } from "../utils/getAddedRemovedPRId";
 import { getCIStatusUpdate } from "../utils/getCIStatusUpdate";
+import { dedupePullRequests } from "../utils/dedupePullRequests";
 import {
   CacheData,
   CIStatus,
@@ -95,10 +96,11 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
       ]);
 
       // Return cached data without making new requests
-      const flatPullRequests = Object.values(cache.pullRequestsPerRepo || {})
-        .flatMap((value) => {
-          return Object.values(value).flat();
-        })
+      const flatPullRequests = dedupePullRequests(
+        Object.values(cache.pullRequestsPerRepo || {}).flatMap((value) =>
+          Object.values(value).flat(),
+        ),
+      )
         .filter((pr) => {
           return activeRepositories?.[pr.base.repo.id];
         })
@@ -171,10 +173,11 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
     Logger.info("[PullRequests] pullsListQuery completed");
   }
 
-  const flatPullRequestsAfterListRefresh = Object.values(
-    cache.pullRequestsPerRepo || {},
+  const flatPullRequestsAfterListRefresh = dedupePullRequests(
+    Object.values(cache.pullRequestsPerRepo || {}).flatMap((value) =>
+      Object.values(value).flat(),
+    ),
   )
-    .flatMap((value) => Object.values(value).flat())
     .filter((pr) => activeRepositories?.[pr.base.repo.id])
     .sort((first, second) => {
       return (
@@ -678,10 +681,11 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
     ...mentionNotifications,
   ] as ManagedNotification[]);
 
-  const flatPullRequests = Object.values(cache.pullRequestsPerRepo || {})
-    .flatMap((value) => {
-      return Object.values(value).flat();
-    })
+  const flatPullRequests = dedupePullRequests(
+    Object.values(cache.pullRequestsPerRepo || {}).flatMap((value) =>
+      Object.values(value).flat(),
+    ),
+  )
     .filter((pr) => {
       return activeRepositories?.[pr.base.repo.id];
     })
