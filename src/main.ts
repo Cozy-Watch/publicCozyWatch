@@ -526,22 +526,6 @@ app.whenReady().then(() => {
   diagnostics.startMetricsCollection();
   log.info("[App] check for updated and notify");
 
-  // Set Content Security Policy
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        "Content-Security-Policy": [
-          isDevelopment
-            ? // Development CSP - allows Vite dev server and hot reload
-              "default-src 'self' 'unsafe-inline' 'unsafe-eval' ws: http://localhost:* http://127.0.0.1:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* http://127.0.0.1:*; worker-src 'self' blob:; connect-src 'self' ws: http://localhost:* http://127.0.0.1:* https://api.github.com https://api.lemonsqueezy.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline';"
-            : // Production CSP - more restrictive
-              "default-src 'self'; script-src 'self'; connect-src 'self' https://api.github.com https://api.lemonsqueezy.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self';",
-        ],
-      },
-    });
-  });
-
   session.defaultSession.setPermissionRequestHandler(
     (_webContents, _permission, callback) => callback(false),
   );
