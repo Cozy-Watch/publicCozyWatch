@@ -2,6 +2,7 @@ import { Menu, nativeImage, Tray } from "electron";
 import path from "node:path";
 import { createWindow, getMainWindow } from "../../main";
 import { getCachedData as getPullRequestsCache } from "../api/PullRequests/utils/getDefaultData";
+import { dedupePullRequests } from "../api/PullRequests/utils/dedupePullRequests";
 import { getCachedData as getRepositoriesCache } from "../api/Repositories/utils/getDefaultData";
 import { getUser } from "../api/User/getUser";
 import { tryOpenExternalUrl } from "../security/externalUrl";
@@ -245,10 +246,9 @@ export const updateTrayMenu = async () => {
     (acc, { name: repoName }) => {
       const reviews = reviewPerRepoPerPullNumber[repoName];
 
-      const pullRequestInfoList = Object.values(
-        pullRequestsPerRepo[repoName] || {}
+      const pullRequestInfoList = dedupePullRequests(
+        Object.values(pullRequestsPerRepo[repoName] || {}).flat(),
       )
-        .flat()
         .filter(
           (pr) =>
             pr?.user?.id === userId ||

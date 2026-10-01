@@ -17,6 +17,7 @@ import type {
 import type { Repository } from "../../../safeStorage/safeStorage.types";
 import { getReviewStatusUpdate } from "../utils/getReviewStatusUpdate";
 import { getReviewNotifications } from "../utils/getReviewNotifications";
+import { dedupePullRequests } from "../utils/dedupePullRequests";
 
 const MAX_REVIEW_PRS = 100;
 const MAX_REVIEW_PAGES = 200;
@@ -449,9 +450,11 @@ export async function sweepReviewDelta(): Promise<ReviewSweepResult> {
             ),
           );
         }
-        next.flatPullRequests = latest.flatPullRequests
-          .filter((pr) => selection.activeRepositories[pr.base.repo.id])
-          .map((pr) => replacements.get(keyOf(pr)) || pr);
+        next.flatPullRequests = dedupePullRequests(
+          latest.flatPullRequests
+            .filter((pr) => selection.activeRepositories[pr.base.repo.id])
+            .map((pr) => replacements.get(keyOf(pr)) || pr),
+        );
         next.pullRequestAddedOrRemoved = { added: [], removed: [] };
         next.CIStatusUpdatePerRepo = {};
         next.reviewUpdateList = { newReview: [], reviewChanged: [] };

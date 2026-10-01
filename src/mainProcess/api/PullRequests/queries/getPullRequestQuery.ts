@@ -199,17 +199,15 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
     pullRequestsAfterListRefresh,
   );
 
-  const listOfPullRequests = Object.values(cache.pullRequestsPerRepo).flatMap(
-    (page) => {
-      const pullRequest = Object.values(page).flat();
-
-      return pullRequest.map((pr) => ({
-        pullNumber: pr.number,
-        owner: pr.base.repo.owner.login,
-        repoName: pr.base.repo.name,
-      }));
-    },
-  );
+  const listOfPullRequests = dedupePullRequests(
+    Object.values(cache.pullRequestsPerRepo).flatMap((page) =>
+      Object.values(page).flat(),
+    ),
+  ).map((pr) => ({
+    pullNumber: pr.number,
+    owner: pr.base.repo.owner.login,
+    repoName: pr.base.repo.name,
+  }));
 
   const repositoriesWithPullRequestsList = Object.keys(
     cache.pullRequestsPerRepo,
@@ -218,7 +216,9 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
   const pullRequestNumberByRepoName: Record<string, string[]> =
     Object.entries(cache.pullRequestsPerRepo).reduce(
       (acc, [repoName, page]) => {
-        const pullRequestsList = Object.values(page).flat();
+        const pullRequestsList = dedupePullRequests(
+          Object.values(page).flat(),
+        );
         const pullNumberList = pullRequestsList.map(({ number }) => number);
 
         return {
@@ -648,8 +648,10 @@ export const pullRequestQuery = async (isCurrent = () => true): Promise<PullRequ
     })
     .flat();
 
-  const allPullRequests = Object.values(cache.pullRequestsPerRepo).flatMap(
-    (page) => Object.values(page).flat(),
+  const allPullRequests = dedupePullRequests(
+    Object.values(cache.pullRequestsPerRepo).flatMap((page) =>
+      Object.values(page).flat(),
+    ),
   );
 
   const mentionNotifications = mentions.addedMentions.map((mention) => {

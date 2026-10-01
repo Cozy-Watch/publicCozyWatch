@@ -55,4 +55,25 @@ describe("getAddedRemovedPRId", () => {
       }),
     ).toStrictEqual({ added: [], removed: [] });
   });
+
+  it("reports a duplicated pull request only once", () => {
+    const { finalCache, initialCache, pullRequests } =
+      createSyntheticCacheFixture();
+    initialCache.pullRequestsPerRepo[SYNTHETIC_REPOSITORY_NAME] = {
+      "1": [pullRequests.existing],
+    };
+    finalCache.pullRequestsPerRepo[SYNTHETIC_REPOSITORY_NAME] = {
+      "1": [pullRequests.existing, pullRequests.added],
+      "2": [pullRequests.added],
+    };
+
+    expect(
+      getAddedRemovedPRId({
+        repositoryName: SYNTHETIC_REPOSITORY_NAME,
+        initialCache,
+        finalCache,
+        userId: SYNTHETIC_USER_ID,
+      }),
+    ).toStrictEqual({ added: [pullRequests.added.id], removed: [] });
+  });
 });
